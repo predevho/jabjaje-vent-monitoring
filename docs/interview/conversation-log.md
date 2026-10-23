@@ -4,7 +4,7 @@
 새 대화가 끝날 때마다 아래에 이어서 추가한다.
 
 - 형식: `#번호 [날짜] 내가 한 말 → 결론`
-- 자세한 설계는 [스펙 문서](../superpowers/specs/2026-10-23-jabjaje-vent-monitoring-design.md), 예상 질문은 [interview-questions.md](interview-questions.md), 개념 정리는 [learning-notes.md](learning-notes.md)에 있다.
+- 자세한 설계는 [스펙 문서](../spec.md), 예상 질문은 [interview-questions.md](interview-questions.md), 개념 정리는 [learning-notes.md](learning-notes.md)에 있다.
 
 ---
 
@@ -120,3 +120,16 @@
 ### #32 GitHub Issues 등록
 - **내가 한 말**: 티켓 15개를 GitHub Issues에 등록해 달라고 했다.
 - **결론**: #1~#15로 등록(티켓 번호 = 이슈 번호). 1~14는 `ready-for-agent`, 15는 `ready-for-human`. 막힘 관계는 GitHub 기본 이슈 의존성으로 연결했다. 지금 바로 시작할 수 있는 티켓은 #1뿐이다.
+
+### #33~#36 #1 시작과 파일 구조 정리
+- **내가 한 말**
+  - `/implement #1`로 첫 티켓을 시작했다.
+  - 파일 트리가 너무 깊다. 진입점까지 들어가는 깊이가 깊으니 분리하는 게 좋겠다고 했다.
+  - `io/github/predevho/vent`까지 들어가서 진입점을 두는 게 의미가 있는지, 패키지 이름을 바꾸거나 얕게 가져가는 게 좋지 않냐고 물었다.
+  - 나중에 패키지를 여러 개 두려고 이렇게 깊게 넣는 거냐고 물었다.
+- **결론**
+  - 빌드: Spring Initializr가 3.x를 더 이상 제공하지 않아 Spring Boot 3.5.16을 직접 지정. Java 25 위에서 돌도록 Gradle 9.8.2, 컴파일은 툴체인으로 Java 17 (ADR-0006 보강)
+  - 브로커: Mosquitto 2 (ADR-0007)
+  - 구조: `server/`(진입점 1)와 `simulator/`(진입점 2, #2에서)로 분리, 스펙은 `docs/spec.md`로 이동
+  - 패키지: 역도메인 앞부분은 외부 배포 라이브러리의 이름 충돌을 막는 장치라 실행 앱에는 필요 없다. 패키지를 여러 개 두는 것과는 관계없고, 기능 패키지는 `vent` 아래에 옆으로 늘어난다. Spring Boot가 기본 패키지를 허용하지 않아 `vent` 한 단계로 정했다 (ADR-0008)
+  - `src/main/java`는 Gradle, IDE, Docker의 기본 경로라 유지
