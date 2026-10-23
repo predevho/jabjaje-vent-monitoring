@@ -7,6 +7,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import vent.site.domain.type.DeviceType;
 
 /**
  * 장비 엔티티 ({@code device} 테이블).

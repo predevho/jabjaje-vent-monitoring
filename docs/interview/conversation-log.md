@@ -154,3 +154,7 @@
   - 엔티티는 테이블마다 파일 하나(Site, Gateway, Device), 응답 DTO는 record마다 파일 하나(SiteResponse, GatewayResponse, DeviceResponse). request DTO는 처음 필요한 티켓(#8 부스트 요청 등)에서 만든다
   - 모든 Java·SQL·테스트 파일에 Javadoc(`@author predevho (AI 보조: Claude)`, `@since 날짜 (#티켓)`). 작성일은 처음 만든 날만 적고, 수정 이력은 git에 맡긴다
   - 규칙은 CLAUDE.md Coding standards에 적어서 이후 `/implement`, `/code-review`가 따르게 했다
+
+### #42 enum 분리
+- **내가 한 말**: enum은 `domain/type`으로 따로 정리해 달라고 했다.
+- **결론**: ConnectionState, DeviceType, TargetAirflowSource를 `domain/type/`으로 옮겼다. `domain/`에는 테이블마다 하나인 엔티티만 남는다. CLAUDE.md 규칙과 ADR-0008에도 반영했다.

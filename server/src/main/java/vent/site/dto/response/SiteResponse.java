@@ -3,7 +3,7 @@ package vent.site.dto.response;
 import java.math.BigDecimal;
 import java.util.List;
 import vent.site.domain.Site;
-import vent.site.domain.TargetAirflowSource;
+import vent.site.domain.type.TargetAirflowSource;
 
 /**
  * 현장 응답.

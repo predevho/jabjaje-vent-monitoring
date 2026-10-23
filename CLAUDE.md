@@ -13,7 +13,8 @@ vent/<feature>/
 ├── controller/      REST endpoints and screens. No business logic, no @Transactional.
 ├── service/         Use cases. Owns @Transactional boundaries.
 ├── repository/      Spring Data JPA repositories (one per aggregate root). Native SQL only where PostgreSQL features are needed.
-├── domain/          JPA entities (one file per table) and the enums they use.
+├── domain/          JPA entities, one file per table.
+│   └── type/        Enums used by the entities (states, kinds, sources).
 └── dto/
     ├── request/     Incoming request bodies and query parameters.
     └── response/    Outgoing response bodies (one record per file). Never expose entities directly.

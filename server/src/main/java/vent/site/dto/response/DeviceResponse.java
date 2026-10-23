@@ -1,7 +1,7 @@
 package vent.site.dto.response;
 
 import vent.site.domain.Device;
-import vent.site.domain.DeviceType;
+import vent.site.domain.type.DeviceType;
 
 /**
  * 장비 응답.

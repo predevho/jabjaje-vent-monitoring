@@ -1,4 +1,4 @@
-package vent.site.domain;
+package vent.site.domain.type;
 
 /**
  * 목표 풍량의 출처.

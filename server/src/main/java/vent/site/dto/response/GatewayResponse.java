@@ -1,7 +1,7 @@
 package vent.site.dto.response;
 
-import vent.site.domain.ConnectionState;
 import vent.site.domain.Gateway;
+import vent.site.domain.type.ConnectionState;
 
 /**
  * 게이트웨이 응답.

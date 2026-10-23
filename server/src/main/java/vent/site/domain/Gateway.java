@@ -7,6 +7,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
+import vent.site.domain.type.ConnectionState;
 
 /**
  * 게이트웨이 엔티티 ({@code gateway} 테이블).

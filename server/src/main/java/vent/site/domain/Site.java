@@ -11,6 +11,7 @@ import jakarta.persistence.OrderBy;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import vent.site.domain.type.TargetAirflowSource;
 
 /**
  * 현장 엔티티 ({@code site} 테이블).

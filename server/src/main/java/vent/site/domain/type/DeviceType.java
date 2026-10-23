@@ -1,4 +1,4 @@
-package vent.site.domain;
+package vent.site.domain.type;
 
 /**
  * 장비 종류.

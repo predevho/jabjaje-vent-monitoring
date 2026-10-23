@@ -2,7 +2,7 @@
 
 서버 앱과 가상 게이트웨이(시뮬레이터)는 진입점이 다르므로 저장소 루트에서 `server/`, `simulator/`로 나눈다. 폴더 이름만 보고 무엇을 실행하는지 알 수 있게 하기 위해서다. 패키지는 관례적인 역도메인 이름(`io.github.predevho.vent`) 대신 `vent` 한 단계로 둔다. 역도메인 이름은 외부에 배포하는 라이브러리의 이름 충돌을 막는 장치인데, 이 프로젝트는 배포하지 않는 실행 앱이라 그 단계가 하는 일 없이 깊이만 늘린다. Spring Boot는 진입점을 기본 패키지에 둘 수 없으므로 한 단계는 유지한다.
 
-`vent` 아래는 먼저 용어집의 기능 단위(`site/`, `telemetry/`, `anomaly/`)로 나누고, 각 기능 안에서 레이어(`controller/`, `service/`, `repository/`, `domain/`, `dto/request/`, `dto/response/`)로 나눈다. 관련 코드는 기능 폴더 한곳에 모이고, 기능 안에서는 역할이 폴더로 드러난다. 엔티티는 테이블마다 파일 하나, 응답 DTO는 record마다 파일 하나로 둔다. 자세한 규칙은 CLAUDE.md의 Coding standards에 있다.
+`vent` 아래는 먼저 용어집의 기능 단위(`site/`, `telemetry/`, `anomaly/`)로 나누고, 각 기능 안에서 레이어(`controller/`, `service/`, `repository/`, `domain/`(enum은 `domain/type/`), `dto/request/`, `dto/response/`)로 나눈다. 관련 코드는 기능 폴더 한곳에 모이고, 기능 안에서는 역할이 폴더로 드러난다. 엔티티는 테이블마다 파일 하나, 응답 DTO는 record마다 파일 하나로 둔다. 자세한 규칙은 CLAUDE.md의 Coding standards에 있다.
 
 ## Considered Options
 
