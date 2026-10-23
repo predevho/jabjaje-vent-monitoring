@@ -72,3 +72,17 @@
 ### #17 프로젝트 폴더와 기록
 - **내가 한 말**: interview-project 안에 프로젝트 폴더를 만들고 git 저장소와 스펙 커밋, 대화 내용과 면접 예상 질문을 기록해서 프로젝트가 끝나면 복습하자고 했다.
 - **결론**: `jabjaje/` 폴더 생성, 스펙 이동, 이 기록 문서들 작성, git 커밋, Claude 메모리에 저장.
+
+### #18 git 이메일 수정
+- **내가 한 말**: git 전역 이메일 오타(gamil)를 고치고 첫 커밋 작성자도 맞춰달라고 했다.
+- **결론**: 전역 이메일을 gmail.com으로 수정, 첫 커밋을 새 작성자로 다시 만듦.
+
+### #19~#22 mattpocock 스킬 설정
+- **내가 한 말**: `/setup-matt-pocock-skills` 실행. 이슈는 GitHub Issues로, 저장소 이름 `jabjaje-vent-monitoring`, **공개** 저장소로 만들자고 했다. 트리아지 라벨은 기본값 5개, 설정 블록은 CLAUDE.md에 쓰자고 했다.
+- **결론**
+  - GitHub 공개 저장소 생성 후 푸시: https://github.com/predevho/jabjaje-vent-monitoring
+  - 공개라서 이 면접 준비 문서도 누구나 볼 수 있다. 필요하면 나중에 비공개로 바꾸거나 문서를 뺀다.
+  - `CLAUDE.md`(Agent skills 블록), `docs/agents/`(issue-tracker, triage-labels, domain) 작성
+  - 트리아지 라벨 4개 생성(`wontfix`는 GitHub 기본 라벨 사용)
+  - 용어집 구조: 루트 `GLOSSARY.md` 하나 + `docs/adr/`
+  - 다음 단계: `/grill-with-docs`
