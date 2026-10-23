@@ -3,7 +3,7 @@
 - 작성일: 2026-10-23
 - 목적: (주)잡자재 백엔드/IoT 플랫폼 개발자 면접(2026-10-27) 대비 사이드프로젝트
 - 개발 기간: 구현 2026-10-23(금) ~ 10-25(일), 복기 10-26(월), 1인
-- 상태: 설계 v5 (용어집·ADR 기준 이름 정리, 일정 재구성)
+- 상태: 설계 v6 (#1 코드 리뷰 반영)
 - 용어는 [GLOSSARY.md](../GLOSSARY.md), 주요 결정은 [docs/adr/](adr/)를 따른다.
 
 ---
@@ -62,13 +62,13 @@
                      [MQTT 브로커]
                            │
                            ▼
-         [Spring Boot 앱 — 하나의 앱, 기능별 패키지]
-           ├─ ingest     : 수신, 검증, 중복 제거, 저장
-           ├─ device     : 현장·장비 조회, 게이트웨이 연결 상태
+         [Spring Boot 앱 — server/, 패키지 vent, 기능별 하위 패키지 (ADR-0008)]
+           ├─ site       : 현장·게이트웨이·장비 조회, 게이트웨이 연결 상태
+           ├─ telemetry  : 측정값 수신, 검증, 중복 제거, 저장
            ├─ anomaly    : 규칙 평가, 이상 생성·해제
            ├─ command    : 원격 명령 발행, 응답·시간초과 처리
-           ├─ service    : A/S 신청, 상황 요약, AI 소견, 검증, 판정
-           └─ web        : REST API, 대시보드
+           └─ service    : A/S 신청, 상황 요약, AI 소견, 검증, 판정
+           (각 기능 패키지가 자기 REST API와 화면을 함께 가진다)
                            │
                            ▼
                      [PostgreSQL]
@@ -195,17 +195,17 @@ SERVICE_REQUEST 1──0..1 VERDICT
 | floor_area_m2 | numeric | 바닥면적 |
 | occupants | int | 거주 인원 |
 | target_airflow_cmh | int | 목표 풍량. TAB으로 맞춘 값이 있으면 그 값, 없으면 최소 환기량 |
-| target_airflow_source | varchar | `TAB` / `MINIMUM` |
+| target_airflow_source | varchar | `TAB` / `MINIMUM_AIRFLOW` |
 
 **device**
 | 컬럼 | 타입 | 설명 |
 |---|---|---|
 | id | varchar PK | 예: `vent-h1` |
 | site_id | bigint FK | |
-| gateway_id | varchar FK | 이 장비를 연결하는 게이트웨이 |
+| gateway_id | varchar | 이 장비를 연결하는 게이트웨이. `(gateway_id, site_id)`가 게이트웨이의 `(id, site_id)`를 참조해, 장비와 게이트웨이의 현장이 항상 같다 |
 | type | varchar | `VENTILATOR` / `VEMC` |
 | model | varchar | 예: `DOMEKT R 300V` |
-| last_seen_at | timestamptz | 이 장비의 측정값을 서버가 마지막으로 받은 시각 |
+| last_received_at | timestamptz | 이 장비의 측정값을 서버가 마지막으로 받은 시각 (#2에서 추가) |
 
 장비에는 연결 상태 컬럼이 없다. 화면의 `확인 불가` 표시는 게이트웨이 상태로 계산한다.
 
@@ -214,11 +214,13 @@ SERVICE_REQUEST 1──0..1 VERDICT
 |---|---|---|
 | id | varchar PK | 예: `gw-s1` |
 | site_id | bigint FK, UNIQUE | 현장당 하나 |
-| connection_state | varchar | `CONNECTED`(연결됨) / `INTERRUPTED`(일시 끊김) / `OFFLINE`(오프라인) |
-| last_seen_at | timestamptz | 서버가 마지막으로 받은 시각 |
-| disconnected_at | timestamptz | 연결이 끊긴 시각 |
-| firmware_version | varchar | 게이트웨이가 보고한 버전 |
-| capabilities | jsonb | 게이트웨이가 보고한 지원 기능 |
+| connection_state | varchar | `PENDING`(연결 전) / `CONNECTED`(연결됨) / `INTERRUPTED`(일시 끊김) / `OFFLINE`(오프라인) |
+| last_received_at | timestamptz | 서버가 마지막으로 받은 시각 (#6에서 추가) |
+| disconnected_at | timestamptz | 연결이 끊긴 시각 (#6에서 추가) |
+| firmware_version | varchar | 게이트웨이가 보고한 버전 (#6에서 추가) |
+| capabilities | jsonb | 게이트웨이가 보고한 지원 기능 (#6에서 추가) |
+
+컬럼은 쓰는 티켓에서 마이그레이션으로 추가한다(ADR-0004의 "추가만" 원칙과 같은 방향). 등록만 되고 한 번도 연결되지 않은 게이트웨이는 `PENDING`이며, 이상을 만들지 않는다.
 
 **telemetry**
 | 컬럼 | 타입 | 설명 |
@@ -310,13 +312,13 @@ SERVICE_REQUEST 1──0..1 VERDICT
 - 범위 밖 값(CO2 0 이하 또는 10,000 초과, 습도 0~100 밖, 풍량 음수 등)은 저장하되 `quality = OUT_OF_RANGE`로 표시하고 이상 규칙에서 제외한다.
 - `measured_at`이 `received_at`보다 5분 넘게 미래면 `quality = CLOCK_SKEW`로 표시한다.
 - `received_at - measured_at`이 2분을 넘으면 `late = true`로 표시한다(버퍼 업로드).
-- `device.last_seen_at`은 수신 시각 기준으로 갱신한다.
+- `device.last_received_at`은 수신 시각 기준으로 갱신한다.
 
 ### 5.3 최소 환기량과 목표 풍량
 최소 환기량은 회사 환기량 산정 기준을 따른다.
 - 인원 기준: 거주 인원 × 30 CMH
 - 면적 기준: 바닥면적 × 층고 2.5m × 0.6회/h
-- 둘 중 큰 값
+- 둘 중 큰 값을 **정수로 올림**한다 (예: 148.5 → 149). 최소 환기량보다 적게 잡히지 않게 하기 위해서다.
 
 목표 풍량은 TAB으로 맞춘 값이 있으면 그 값이고, 없으면 최소 환기량과 같다. `AIRFLOW_BELOW_TARGET` 이상은 목표 풍량과 비교한다.
 
@@ -354,10 +356,11 @@ SERVICE_REQUEST 1──0..1 VERDICT
 ### 6.3 오프라인 감지와 화면 표시
 감지는 두 경로로 한다. 어느 쪽이든 먼저 걸리면 일시 끊김으로 본다.
 - **Last Will**: 게이트웨이 연결이 끊기면 브로커가 keepalive 시간의 1.5배(keepalive 60초면 약 90초) 뒤에 `offline`을 대신 발행한다.
-- **무수신 검사**: 30초 주기 스케줄러가 `last_seen_at`이 2분 넘게 지난 게이트웨이를 찾는다. Wi-Fi가 꺼졌는데 TCP 연결이 끊긴 줄 모르는 경우(half-open)에 대비한다.
+- **무수신 검사**: 30초 주기 스케줄러가 `last_received_at`이 2분 넘게 지난 게이트웨이를 찾는다. 연결 전(`PENDING`) 게이트웨이는 검사하지 않는다. Wi-Fi가 꺼졌는데 TCP 연결이 끊긴 줄 모르는 경우(half-open)에 대비한다.
 
 | 단계 | 조건 | 직원 대시보드 | 고객 화면 |
 |---|---|---|---|
+| 연결 전 (`PENDING`) | 등록 후 아직 한 번도 수신 없음 | 회색 "연결 전 · 설치 대기" 배지, 장비는 `확인 불가`. 이상을 만들지 않는다 | "설치가 끝나면 상태가 표시돼요." |
 | 연결됨 (`CONNECTED`) | 마지막 수신 2분 이내 | 초록 배지, 실시간 값 | 실시간 값 |
 | 일시 끊김 (`INTERRUPTED`) | 2~30분 | 게이트웨이에 회색 "일시 끊김 · 마지막 수신 N분 전" 배지, 장비는 `확인 불가`로 마지막 값을 흐리게 표시, 그래프 빈 구간 음영, 부스트 버튼 비활성화. **이상 목록에는 올리지 않는다** | "연결이 잠시 끊겼어요. 환기장치는 집 안에서 계속 동작 중이에요." |
 | 오프라인 (`OFFLINE`) | 30분 넘게 | 위 표시 + 이상 목록에 `GATEWAY_OFFLINE`(WARN). A/S 담당 확인 대상 | "연결이 끊긴 지 30분이 넘었어요. 집 Wi-Fi를 확인해 주세요." |
@@ -643,4 +646,5 @@ v1 설계를 통신 안정성, 보안, 제어 안전, 데이터 품질, AI, 운�
   - 게이트웨이를 장비에서 분리(`gateway` 테이블, `CONNECTED` / `INTERRUPTED` / `OFFLINE`), 끊긴 동안 장비는 `확인 불가`, `DEVICE_OFFLINE` → `GATEWAY_OFFLINE`
   - A/S 접수 → A/S 신청(`as_ticket` → `service_request`), 1차 진단 → AI 소견(`ai_assessment`), 진단 검토 → 판정(`verdict` 테이블 추가)
   - 숫자 기준 문장에서 "이상"(≥) 대신 "넘게", "도달" 사용
+- v6: #1 코드 리뷰 반영. 게이트웨이 `PENDING`(연결 전) 상태 추가, `MINIMUM` → `MINIMUM_AIRFLOW`, 최소 환기량 올림 명시, 장비와 게이트웨이의 현장 일치 제약, 수신 시각 컬럼 이름을 `last_received_at`으로 하고 쓰는 티켓에서 추가, 3장 패키지 그림을 ADR-0008에 맞춤
 - v5: 10장 일정 재구성. 구현은 일요일까지, 월요일은 복기. 시간대는 참고용, 날짜별 할당량은 그날 완료. 티켓 1~15 타임테이블과 축소 판단 시점 추가

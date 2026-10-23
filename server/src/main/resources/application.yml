@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: vent-monitoring
+  datasource:
+    # Local defaults for running outside Docker. Docker Compose overrides these.
+    url: jdbc:postgresql://localhost:5432/vent
+    username: vent
+    password: vent
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Flyway owns the schema; Hibernate only checks that entities match it.
+      ddl-auto: validate

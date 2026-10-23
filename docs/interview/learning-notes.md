@@ -133,3 +133,12 @@
 - **기능별 패키지**: `controller/service/repository` 계층 폴더 대신 `site/`, `telemetry/`처럼 기능 단위로 나누면 깊어지지 않고 용어집과 맞는다
 - **모듈 분리**: 진입점(main)이 둘이면 모듈을 나눈다 → `server/`, `simulator/`
 - **Gradle 툴체인**: 빌드 도구를 돌리는 Java(25)와 코드를 컴파일하는 Java(17)를 분리할 수 있다
+
+## #1 구현에서 배운 것
+- **TDD red → green**: 테스트를 먼저 쓰고 "올바른 이유로" 실패하는지 본다(여기선 API가 없어 404). 그다음 통과할 만큼만 구현한다
+- **Testcontainers + @ServiceConnection**: 테스트가 실제 PostgreSQL 컨테이너를 띄우고 접속 정보를 자동으로 연결한다
+- **Flyway + `ddl-auto: validate`**: 스키마는 마이그레이션이 만들고, Hibernate는 엔티티가 스키마와 맞는지만 확인한다
+- **이미 적용된 마이그레이션을 고치면** Flyway가 체크섬이 다르다며 멈춘다. 배포 전 로컬이면 DB를 지우고 다시, 배포 후라면 새 버전 파일을 추가한다
+- **`@EntityGraph`**: 현장 목록과 게이트웨이·장비를 한 쿼리로 가져와 N+1 쿼리를 피한다
+- **복합 외래키**: `(gateway_id, site_id) → gateway(id, site_id)`로 "장비의 현장 = 게이트웨이의 현장"을 DB가 보장한다
+- **코드 리뷰 두 축**: 표준(규칙·용어·냄새)과 스펙(요구사항)을 따로 봐야 서로 가리지 않는다
