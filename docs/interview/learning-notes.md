@@ -176,3 +176,10 @@
 - **시간대**: DB(timestamptz)와 Hibernate를 UTC로 맞추면 서버가 어느 시간대에서 돌든 API 응답 시각이 같다. 화면에서 사용자 시간대로 바꿔 보여 준다
 - **java.util.Random**: 시드가 가까우면 처음 값들이 거의 같다
 - **React + Spring 한 주소**: Vite 빌드 결과를 Spring Boot 정적 리소스로 넣으면 CORS 없이 주소 하나로 서비스한다. 개발할 때는 Vite 프록시로 `/api`를 넘긴다
+
+## 숫자 밑줄과 MQTT 통신 방식 (#50~#51)
+- **숫자 밑줄 `30_000`**: 자릿수 구분자(Java 7+, TS/JS). 값은 30000. 쉼표는 값 구분자라 숫자 안에 못 쓴다. 숫자 사이에만 쓸 수 있다
+- **MQTT vs 웹소켓**: 둘 다 연결 하나로 동시에 양방향. 웹소켓은 1:1 직통(전화), MQTT는 브로커 경유 발행/구독(단톡방)
+  - MQTT는 받는 대상이 토픽 구독자 전체, 상대가 꺼져 있어도 세션이 있으면 브로커가 보관, QoS·keepalive·Last Will이 기본 기능
+  - 패킷: CONNECT/CONNACK, PUBLISH/PUBACK, SUBSCRIBE/SUBACK, PINGREQ/PINGRESP, DISCONNECT
+  - 우리 구조: 위로(측정값, #2) + 아래로(명령, #8)를 게이트웨이 연결 하나로. 화면은 HTTP 폴링
