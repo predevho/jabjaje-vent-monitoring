@@ -2,6 +2,7 @@ package vent;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 /**
  * 환기 모니터링 서버의 진입점.
@@ -12,6 +13,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * @since 2026-10-23 (#1)
  */
 @SpringBootApplication
+@ConfigurationPropertiesScan
 public class VentMonitoringApplication {
 
     public static void main(String[] args) {

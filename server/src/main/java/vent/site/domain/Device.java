@@ -7,6 +7,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import java.time.OffsetDateTime;
 import vent.site.domain.type.DeviceType;
 
 /**
@@ -38,11 +39,43 @@ public class Device {
 
     private String model;
 
+    private OffsetDateTime lastReceivedAt;
+
     protected Device() {
+    }
+
+    /**
+     * 이 장비의 측정값을 서버가 받았음을 기록한다. 동시에 처리된 메시지들 중 수신 시각이 더 이른 쪽이
+     * 마지막 수신 시각을 되돌리지 않도록, 더 새로운 수신 시각일 때만 바꾼다.
+     *
+     * @since 2026-10-23 (#2)
+     */
+    public void markReceived(OffsetDateTime receivedAt) {
+        if (lastReceivedAt == null || receivedAt.isAfter(lastReceivedAt)) {
+            lastReceivedAt = receivedAt;
+        }
+    }
+
+    /**
+     * 이 장비가 주어진 현장에 속하는지. 토픽의 현장 ID가 장비의 현장과 맞는지 확인할 때 쓴다.
+     *
+     * @param siteId 토픽에서 읽은 현장 ID (문자열)
+     * @since 2026-10-23 (#2)
+     */
+    public boolean belongsTo(String siteId) {
+        return String.valueOf(site.getId()).equals(siteId);
     }
 
     public String getId() {
         return id;
+    }
+
+    public Site getSite() {
+        return site;
+    }
+
+    public OffsetDateTime getLastReceivedAt() {
+        return lastReceivedAt;
     }
 
     public DeviceType getType() {

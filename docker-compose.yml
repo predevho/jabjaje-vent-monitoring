@@ -36,8 +36,23 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/vent
       SPRING_DATASOURCE_USERNAME: vent
       SPRING_DATASOURCE_PASSWORD: vent
+      VENT_MQTT_SERVER_URI: tcp://mosquitto:1883
     ports:
       - "8080:8080"
+
+  # 가상 게이트웨이: 현장 3곳의 측정값을 발행한다 (스펙 3.3)
+  simulator:
+    build:
+      context: .
+      dockerfile: simulator/Dockerfile
+    depends_on:
+      mosquitto:
+        condition: service_started
+      app:
+        condition: service_started
+    environment:
+      MQTT_URI: tcp://mosquitto:1883
+      INTERVAL_SECONDS: "30"
 
 volumes:
   mosquitto-data:

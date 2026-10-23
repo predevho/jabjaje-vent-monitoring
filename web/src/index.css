@@ -1,0 +1,119 @@
+/*
+ * 전역 스타일.
+ *
+ * 기능 확인용 화면이라 단순한 카드와 표만 쓴다 (ADR-0010).
+ *
+ * @author predevho (AI 보조: Claude)
+ * @since 2026-10-23 (#2)
+ */
+:root {
+  font-family: system-ui, -apple-system, 'Apple SD Gothic Neo', sans-serif;
+  color: #1f2328;
+  background: #f6f8fa;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+h1 {
+  font-size: 22px;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  color: #59636e;
+  margin: 0 0 20px;
+  font-size: 14px;
+}
+
+.error {
+  background: #ffebe9;
+  color: #82071e;
+  padding: 10px 12px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+
+.site-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #d1d9e0;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.card h2 {
+  font-size: 17px;
+  margin: 0;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.muted {
+  color: #59636e;
+  font-size: 13px;
+}
+
+.badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.badge-pending {
+  background: #eaeef2;
+  color: #424a53;
+}
+
+.badge-connected {
+  background: #dafbe1;
+  color: #116329;
+}
+
+.badge-interrupted {
+  background: #fff8c5;
+  color: #7d4e00;
+}
+
+.badge-offline {
+  background: #ffebe9;
+  color: #82071e;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+th {
+  text-align: left;
+  font-weight: 500;
+  color: #59636e;
+  padding: 4px 0;
+}
+
+td {
+  text-align: right;
+  padding: 4px 0;
+}

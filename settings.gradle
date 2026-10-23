@@ -6,3 +6,4 @@ plugins {
 rootProject.name = 'jabjaje-vent-monitoring'
 
 include 'server'
+include 'simulator'

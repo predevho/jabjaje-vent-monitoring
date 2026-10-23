@@ -22,6 +22,30 @@ vent/<feature>/
 
 Create a layer folder only when the feature has a class for it (an empty `dto/request/` is not committed).
 
+Inbound messages from devices (MQTT) are handled like HTTP requests: the MQTT listener sits in the feature's `controller/` and the message shape in `dto/request/`. Infrastructure shared by several features (the MQTT client connection) lives in `vent/global/<topic>/`.
+
+### Simulator (`simulator/`)
+
+Plain Java 17, no Spring. Package `vent.simulator`. Same documentation-comment rule as the server.
+
+### Web (`web/`, ADR-0010)
+
+React + TypeScript + Vite. Screens are for verifying features, so keep them simple.
+
+```
+web/src/
+├── pages/        One component per screen.
+├── components/   Reusable pieces used by pages.
+├── api/          Functions that call the server's `/api` endpoints.
+└── types/        TypeScript types that mirror the server's response DTOs.
+```
+
+Every `.ts`/`.tsx` file starts with a JSDoc block stating what it is, `@author predevho (AI 보조: Claude)`, and `@since <date> (#<issue>)`. Use GLOSSARY.md terms for on-screen Korean text.
+
+### Database migrations
+
+Flyway migrations live in `server/src/main/resources/db/migration/`. Never edit a migration once it has been committed, not even its comments: Flyway checks each file's checksum and refuses to start when an applied file changed. Make every schema change as a new `V<n>__<what>.sql`.
+
 ### Documentation comments
 
 Every class, record, enum, interface, test class, and SQL migration starts with a documentation comment that states what it is, who wrote it, and when:

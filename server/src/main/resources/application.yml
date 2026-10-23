@@ -11,3 +11,13 @@ spring:
     hibernate:
       # Flyway owns the schema; Hibernate only checks that entities match it.
       ddl-auto: validate
+    properties:
+      # Read and write timestamps in UTC so API responses do not depend on the server's time zone.
+      hibernate.jdbc.time_zone: UTC
+      hibernate.timezone.default_storage: NORMALIZE_UTC
+
+vent:
+  mqtt:
+    # Docker Compose overrides this with the broker's service name.
+    server-uri: tcp://localhost:1883
+    client-id: vent-server

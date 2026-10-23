@@ -1,0 +1,29 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'vent'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Use the same library versions as the server without pulling in Spring itself.
+    implementation platform('org.springframework.boot:spring-boot-dependencies:3.5.16')
+    implementation 'org.eclipse.paho:org.eclipse.paho.mqttv5.client:1.2.5'
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+}
+
+application {
+    mainClass = 'vent.simulator.SimulatorApplication'
+}

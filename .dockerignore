@@ -3,3 +3,5 @@
 .git/
 .idea/
 docs/
+web/node_modules/
+web/dist/

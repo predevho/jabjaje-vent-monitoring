@@ -1,0 +1,15 @@
+package vent.site.repository;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import vent.site.domain.Device;
+
+/**
+ * 장비 저장소.
+ *
+ * <p>측정값을 받을 때 장비가 등록되어 있는지, 어느 현장 장비인지 확인하는 데 쓴다.
+ *
+ * @author predevho (AI 보조: Claude)
+ * @since 2026-10-23 (#2)
+ */
+public interface DeviceRepository extends JpaRepository<Device, String> {
+}
