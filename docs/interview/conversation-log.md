@@ -184,3 +184,4 @@
   - E: MQTT 수신 처리기를 `controller/`에서 `listener/`로 (HTTP 입구와 메시지 입구 구분)
   - H: Vite 기본 파비콘을 환기 아이콘으로
   - 그대로 둔 것: `global/`(국내 관례), `site/` 안의 게이트웨이(#6에서 분리 검토), `...Impl`(Spring Data 규칙), tsconfig 3개(Vite 표준)
+- 학습 자료: `docs/interview/code-walkthrough.md`(측정값 하나의 여정을 파일 순서로, 단계별 현업 용어와 면접 질문, Mermaid 흐름 그림, 스스로 설명하기 10문항), `docs/interview/industry-terms.md`(현업 용어 약 60개를 7개 분야로)

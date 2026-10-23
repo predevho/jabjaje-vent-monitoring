@@ -1,6 +1,8 @@
 # 학습 노트
 
 프로젝트를 하면서 새로 배운 개념을 정리한다. 프로젝트가 끝나면 맨 아래 복습 체크리스트로 스스로 설명해 본다.
+
+코드 흐름은 [code-walkthrough.md](code-walkthrough.md), 현업 용어는 [industry-terms.md](industry-terms.md)에 따로 있다.
 `(#번호)`는 [대화 기록](conversation-log.md)의 번호다.
 
 ---
