@@ -10,7 +10,8 @@ Code lives under `server/src/main/java/vent/`. Each feature (named after a GLOSS
 
 ```
 vent/<feature>/
-├── controller/      REST endpoints and screens. No business logic, no @Transactional.
+├── controller/      HTTP (REST) endpoints. No business logic, no @Transactional.
+├── listener/        Message entry points (MQTT subscriptions). Same rules as controller.
 ├── service/         Use cases. Owns @Transactional boundaries.
 ├── repository/      Spring Data JPA repositories (one per aggregate root). Native SQL only where PostgreSQL features are needed.
 ├── domain/          JPA entities, one file per table.
@@ -22,7 +23,9 @@ vent/<feature>/
 
 Create a layer folder only when the feature has a class for it (an empty `dto/request/` is not committed).
 
-Inbound messages from devices (MQTT) are handled like HTTP requests: the MQTT listener sits in the feature's `controller/` and the message shape in `dto/request/`. Infrastructure shared by several features (the MQTT client connection) lives in `vent/global/<topic>/`.
+Inbound messages from devices (MQTT) are handled like HTTP requests but kept apart from them: the MQTT listener sits in the feature's `listener/` and the message shape in `dto/request/`. Infrastructure shared by several features (the MQTT client connection) lives in `vent/global/<topic>/`.
+
+Name types after the feature they belong to (`TelemetryIngestResult`, not `IngestResult`) so a name stays unambiguous when another feature grows a similar type.
 
 ### Simulator (`simulator/`)
 
@@ -45,6 +48,8 @@ Every `.ts`/`.tsx` file starts with a JSDoc block stating what it is, `@author p
 ### Database migrations
 
 Flyway migrations live in `server/src/main/resources/db/migration/`. Never edit a migration once it has been committed, not even its comments: Flyway checks each file's checksum and refuses to start when an applied file changed. Make every schema change as a new `V<n>__<what>.sql`.
+
+Demo seed data never goes into `db/migration/`. It lives in `db/seed/` as an idempotent repeatable migration (`R__*.sql`, `ON CONFLICT DO NOTHING`) that only the `demo` profile loads (ADR-0011). Tests that need the seed use `@ActiveProfiles("demo")`.
 
 ### Documentation comments
 

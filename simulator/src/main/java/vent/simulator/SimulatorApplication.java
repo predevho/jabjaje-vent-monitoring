@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit;
  * 가상 게이트웨이(시뮬레이터)의 진입점.
  *
  * <p>현장 3곳의 게이트웨이를 흉내 내어, 현장마다 MQTT 연결 하나로 열회수 환기장치의 측정값을 주기적으로 발행한다(스펙 3.3).
- * 현장 목록은 서버의 시드 데이터(V2__seed_sites.sql)와 같다.
+ * 현장 목록은 서버의 시연용 시드 데이터(db/seed/R__demo_seed.sql)와 같다.
  *
  * <p>환경변수: {@code MQTT_URI}(기본 {@code tcp://localhost:1883}), {@code INTERVAL_SECONDS}(기본 30).
  *

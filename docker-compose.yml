@@ -37,6 +37,8 @@ services:
       SPRING_DATASOURCE_USERNAME: vent
       SPRING_DATASOURCE_PASSWORD: vent
       VENT_MQTT_SERVER_URI: tcp://mosquitto:1883
+      # 시연용 현장 3곳 시드 데이터를 넣는다 (ADR-0011)
+      SPRING_PROFILES_ACTIVE: demo
     ports:
       - "8080:8080"
 

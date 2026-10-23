@@ -7,7 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import vent.site.domain.Device;
 import vent.site.repository.DeviceRepository;
 import vent.telemetry.dto.request.TelemetryMessage;
-import vent.telemetry.repository.NewTelemetry;
+import vent.telemetry.repository.TelemetryInsertParams;
 import vent.telemetry.repository.TelemetryRepository;
 
 /**
@@ -40,33 +40,33 @@ public class TelemetryIngestService {
      * @return 처리 결과. 저장되지 않았으면 그 이유
      */
     @Transactional
-    public IngestResult ingest(String topicSiteId, String topicDeviceId, TelemetryMessage message, OffsetDateTime receivedAt) {
+    public TelemetryIngestResult ingest(String topicSiteId, String topicDeviceId, TelemetryMessage message, OffsetDateTime receivedAt) {
         if (!message.hasAllRequiredFields()) {
-            return IngestResult.INVALID;
+            return TelemetryIngestResult.INVALID;
         }
         if (!topicDeviceId.equals(message.deviceId())) {
-            return IngestResult.DEVICE_ID_MISMATCH;
+            return TelemetryIngestResult.DEVICE_ID_MISMATCH;
         }
         Optional<Device> found = deviceRepository.findById(topicDeviceId);
         if (found.isEmpty()) {
-            return IngestResult.UNKNOWN_DEVICE;
+            return TelemetryIngestResult.UNKNOWN_DEVICE;
         }
         Device device = found.get();
         if (!device.belongsTo(topicSiteId)) {
-            return IngestResult.SITE_MISMATCH;
+            return TelemetryIngestResult.SITE_MISMATCH;
         }
 
-        int inserted = telemetryRepository.insertIgnoringDuplicate(toNewTelemetry(topicDeviceId, message, receivedAt));
+        int inserted = telemetryRepository.insertIgnoringDuplicate(toInsertParams(topicDeviceId, message, receivedAt));
         if (inserted == 0) {
-            return IngestResult.DUPLICATE;
+            return TelemetryIngestResult.DUPLICATE;
         }
         device.markReceived(receivedAt);
-        return IngestResult.STORED;
+        return TelemetryIngestResult.STORED;
     }
 
     /** 메시지에서 저장할 값을 만든다. 측정값 필드를 옮겨 담는 곳은 여기 한 곳뿐이다. */
-    private static NewTelemetry toNewTelemetry(String deviceId, TelemetryMessage message, OffsetDateTime receivedAt) {
-        return new NewTelemetry(
+    private static TelemetryInsertParams toInsertParams(String deviceId, TelemetryMessage message, OffsetDateTime receivedAt) {
+        return new TelemetryInsertParams(
                 deviceId,
                 message.messageId(),
                 message.measuredAt(),

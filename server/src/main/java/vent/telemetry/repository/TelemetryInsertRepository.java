@@ -15,5 +15,5 @@ public interface TelemetryInsertRepository {
      *
      * @return 새로 저장했으면 1, 중복이라 무시했으면 0
      */
-    int insertIgnoringDuplicate(NewTelemetry telemetry);
+    int insertIgnoringDuplicate(TelemetryInsertParams telemetry);
 }

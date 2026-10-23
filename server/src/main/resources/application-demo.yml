@@ -1,0 +1,5 @@
+# Demo profile: schema migrations plus demo seed data (three sites). ADR-0011.
+# Docker Compose and the integration tests run with this profile.
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/seed

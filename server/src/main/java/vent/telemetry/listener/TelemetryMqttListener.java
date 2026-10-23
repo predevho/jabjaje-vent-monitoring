@@ -1,4 +1,4 @@
-package vent.telemetry.controller;
+package vent.telemetry.listener;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -9,14 +9,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import vent.global.mqtt.MqttMessageHandler;
 import vent.telemetry.dto.request.TelemetryMessage;
-import vent.telemetry.service.IngestResult;
+import vent.telemetry.service.TelemetryIngestResult;
 import vent.telemetry.service.TelemetryIngestService;
 
 /**
  * 측정값 MQTT 수신 처리기.
  *
  * <p>{@code jabjaje/{현장ID}/{장비ID}/telemetry} 토픽을 구독해 메시지를 해석하고 {@link TelemetryIngestService}에 넘긴다.
- * HTTP 컨트롤러처럼 외부 입력을 받는 입구라서 controller 레이어에 둔다.
+ * HTTP 입구(controller)와 구분해 메시지 입구는 listener 레이어에 둔다.
  *
  * @author predevho (AI 보조: Claude)
  * @since 2026-10-23 (#2)
@@ -59,8 +59,8 @@ public class TelemetryMqttListener implements MqttMessageHandler {
             return;
         }
 
-        IngestResult result = ingestService.ingest(siteId, deviceId, message, receivedAt);
-        if (result == IngestResult.STORED) {
+        TelemetryIngestResult result = ingestService.ingest(siteId, deviceId, message, receivedAt);
+        if (result == TelemetryIngestResult.STORED) {
             log.debug("측정값 저장: {} {}", deviceId, message.messageId());
         } else {
             log.warn("측정값 저장 안 함 ({}): 토픽 {}, messageId {}", result, topic, message.messageId());

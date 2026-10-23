@@ -6,6 +6,9 @@ spring:
     url: jdbc:postgresql://localhost:5432/vent
     username: vent
     password: vent
+  flyway:
+    # Schema only. Demo seed data is added by the demo profile (application-demo.yml, ADR-0011).
+    locations: classpath:db/migration
   jpa:
     open-in-view: false
     hibernate:

@@ -9,7 +9,7 @@ package vent.telemetry.service;
  * @author predevho (AI 보조: Claude)
  * @since 2026-10-23 (#2)
  */
-public enum IngestResult {
+public enum TelemetryIngestResult {
     /** 저장됨 */
     STORED,
     /** 이미 같은 messageId가 저장되어 무시함 (QoS 1 중복 전달) */
