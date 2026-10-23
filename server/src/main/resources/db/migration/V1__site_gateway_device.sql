@@ -1,3 +1,7 @@
+-- 현장, 게이트웨이, 장비 테이블 스키마.
+-- @author predevho (AI 보조: Claude)
+-- @since 2026-10-23 (#1)
+
 -- 현장: 장비가 설치된 건물 하나 (GLOSSARY: 현장)
 CREATE TABLE site (
     id                    BIGSERIAL PRIMARY KEY,

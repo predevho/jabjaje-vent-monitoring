@@ -1,4 +1,4 @@
-package vent.site;
+package vent.site.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -12,7 +12,14 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
-/** 현장: 장비가 설치된 건물 하나. */
+/**
+ * 현장 엔티티 ({@code site} 테이블).
+ *
+ * <p>장비가 설치된 건물 하나. 바닥면적, 거주 인원, 목표 풍량을 가지며 게이트웨이 하나와 장비 여러 대가 속한다.
+ *
+ * @author predevho (AI 보조: Claude)
+ * @since 2026-10-23 (#1)
+ */
 @Entity
 public class Site {
 

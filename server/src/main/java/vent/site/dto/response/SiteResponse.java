@@ -1,10 +1,19 @@
-package vent.site;
+package vent.site.dto.response;
 
 import java.math.BigDecimal;
 import java.util.List;
+import vent.site.domain.Site;
+import vent.site.domain.TargetAirflowSource;
 
-/** 현장 목록 API 응답. 엔티티를 그대로 내보내지 않고 화면에 필요한 값만 담는다. */
-record SiteResponse(
+/**
+ * 현장 응답.
+ *
+ * <p>엔티티를 그대로 내보내지 않고 화면에 필요한 현장 정보와 그 게이트웨이, 장비만 담는다.
+ *
+ * @author predevho (AI 보조: Claude)
+ * @since 2026-10-23 (#1)
+ */
+public record SiteResponse(
         Long id,
         String name,
         String region,
@@ -15,7 +24,7 @@ record SiteResponse(
         GatewayResponse gateway,
         List<DeviceResponse> devices) {
 
-    static SiteResponse from(Site site) {
+    public static SiteResponse from(Site site) {
         return new SiteResponse(
                 site.getId(),
                 site.getName(),
@@ -26,17 +35,5 @@ record SiteResponse(
                 site.getTargetAirflowSource(),
                 GatewayResponse.from(site.getGateway()),
                 site.getDevices().stream().map(DeviceResponse::from).toList());
-    }
-
-    record GatewayResponse(String id, ConnectionState connectionState) {
-        static GatewayResponse from(Gateway gateway) {
-            return gateway == null ? null : new GatewayResponse(gateway.getId(), gateway.getConnectionState());
-        }
-    }
-
-    record DeviceResponse(String id, DeviceType type, String model) {
-        static DeviceResponse from(Device device) {
-            return new DeviceResponse(device.getId(), device.getType(), device.getModel());
-        }
     }
 }

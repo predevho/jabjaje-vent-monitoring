@@ -68,7 +68,7 @@
            ├─ anomaly    : 규칙 평가, 이상 생성·해제
            ├─ command    : 원격 명령 발행, 응답·시간초과 처리
            └─ service    : A/S 신청, 상황 요약, AI 소견, 검증, 판정
-           (각 기능 패키지가 자기 REST API와 화면을 함께 가진다)
+           (각 기능 안은 controller / service / repository / domain / dto(request, response) 레이어로 나눈다. CLAUDE.md Coding standards)
                            │
                            ▼
                      [PostgreSQL]

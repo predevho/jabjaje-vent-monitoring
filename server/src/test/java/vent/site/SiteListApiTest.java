@@ -17,8 +17,13 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * 테스트 지점: 실제 PostgreSQL에 마이그레이션과 시드를 적용한 상태의 현장 목록 API.
+ * 현장 목록 API 통합 테스트.
+ *
+ * <p>테스트 지점: 실제 PostgreSQL에 마이그레이션과 시드를 적용한 상태의 현장 목록 API.
  * 기대값은 코드가 아니라 스펙의 시드 계획(현장 3곳)과 5.3 계산식에서 가져왔다.
+ *
+ * @author predevho (AI 보조: Claude)
+ * @since 2026-10-23 (#1)
  */
 @SpringBootTest
 @AutoConfigureMockMvc

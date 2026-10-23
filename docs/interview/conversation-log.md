@@ -143,3 +143,14 @@
   - 코드 리뷰를 두 축으로 따로 돌렸다. 표준(용어집·ADR·코드 냄새) 9건, 스펙(완료 기준) 3건. 막아야 할 결함은 없었다.
   - 리뷰가 잡은 것: 한 번도 연결 안 된 게이트웨이를 OFFLINE으로 시작하면 #6에서 설치도 안 된 현장에 오프라인 이상이 생긴다 → `PENDING`(연결 전) 추가. 테스트가 현장 1의 장비만 확인 → 세 현장 모두 확인. 장비와 게이트웨이의 현장이 달라질 수 있음 → 복합 외래키로 DB가 막도록 함(실제로 거부되는 것 확인)
   - 미룬 것: 목표 풍량 값 타입(#5), 주석 언어 통일, `@Transactional` 위치(서비스 로직이 생길 때)
+
+### #40~#41 코딩 규칙 추가 (레이어 분리, 문서화 주석)
+- **내가 한 말**
+  - 코드를 쓸 때 레이어를 분리해 파일 트리를 나누고, 문서화 주석으로 언제, 누가, 어떤 코드인지 적어 달라고 했다.
+  - 추천대로(기능 → 레이어, 작성자 `predevho (AI 보조: Claude)`) 하고, DTO는 request와 response로 나누고, 엔티티도 테이블별로 나눠 달라고 했다.
+- **결론**
+  - 구조: `vent/<기능>/controller, service, repository, domain, dto/request, dto/response`. 레이어 → 기능 방식은 기능이 늘면 한 폴더에 관계없는 파일이 쌓여서 택하지 않았다 (ADR-0008 수정)
+  - 서비스 레이어를 새로 만들고 `@Transactional`을 컨트롤러에서 서비스로 옮겼다 (#1 리뷰에서 미뤘던 항목 해결)
+  - 엔티티는 테이블마다 파일 하나(Site, Gateway, Device), 응답 DTO는 record마다 파일 하나(SiteResponse, GatewayResponse, DeviceResponse). request DTO는 처음 필요한 티켓(#8 부스트 요청 등)에서 만든다
+  - 모든 Java·SQL·테스트 파일에 Javadoc(`@author predevho (AI 보조: Claude)`, `@since 날짜 (#티켓)`). 작성일은 처음 만든 날만 적고, 수정 이력은 git에 맡긴다
+  - 규칙은 CLAUDE.md Coding standards에 적어서 이후 `/implement`, `/code-review`가 따르게 했다

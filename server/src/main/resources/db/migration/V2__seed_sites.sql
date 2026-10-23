@@ -1,4 +1,8 @@
--- 시연용 현장 3곳. 지역은 잡자재 시공 사례 지역을 따랐다.
+-- 시연용 시드 데이터: 현장 3곳과 각 현장의 게이트웨이, 장비.
+-- @author predevho (AI 보조: Claude)
+-- @since 2026-10-23 (#1)
+
+-- 지역은 잡자재 시공 사례 지역을 따랐다.
 -- 목표 풍량 계산 근거는 스펙 5.3 (TAB 값 우선, 없으면 최소 환기량을 올림)
 INSERT INTO site (id, name, region, floor_area_m2, occupants, target_airflow_cmh, target_airflow_source) VALUES
     (1, '양평 현장',   '경기 양평군',   132.0, 4, 210, 'TAB'),
