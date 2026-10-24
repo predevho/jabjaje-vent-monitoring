@@ -10,9 +10,22 @@
 /** A/S 신청 상태: 접수됨, 소견 완료, 사람 확인 필요, 판정됨 */
 export type ServiceRequestStatus = 'RECEIVED' | 'ASSESSED' | 'NEEDS_HUMAN' | 'DECIDED'
 
+/** 원인 분류 (#12). 소견 기준표 항목과 1:1 */
+export type AssessmentCauseCategory =
+  | 'FILTER_CLOGGED'
+  | 'AIRFLOW_SHORTAGE'
+  | 'BYPASS'
+  | 'VEMC_NOT_LINKED'
+  | 'AIRTIGHTNESS'
+  | 'TARGET_AIRFLOW_MISMATCH'
+  | 'NO_EQUIPMENT_PROBLEM'
+  | 'INSUFFICIENT_DATA'
+
 export interface AssessmentCause {
   title: string
   likelihood: 'HIGH' | 'MEDIUM' | 'LOW'
+  /** 원인 분류 (#12). #12 이전 소견에는 없다 */
+  category?: AssessmentCauseCategory
   evidence: string[]
 }
 

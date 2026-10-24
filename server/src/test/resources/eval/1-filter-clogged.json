@@ -1,0 +1,49 @@
+{
+  "id": "1-filter-clogged",
+  "scenario": "필터 차압이 7일간 계속 상승",
+  "expected": [
+    "FILTER_CLOGGED"
+  ],
+  "customerMessage": "요즘 환기장치 바람이 약해진 것 같아요. 예전보다 공기가 탁해요.",
+  "summary": {
+    "site": {
+      "region": "경기 안성시",
+      "floorAreaM2": 132.0,
+      "occupants": 4,
+      "targetAirflowCmh": 180,
+      "minimumAirflowCmh": 180,
+      "devices": [
+        {
+          "type": "VENTILATOR",
+          "model": "DOMEKT R 300V"
+        },
+        {
+          "type": "VEMC",
+          "model": "VEMC"
+        }
+      ]
+    },
+    "co2AvgPpm": 880,
+    "co2MaxPpm": 1150,
+    "supplyToTargetRatio": 0.72,
+    "filterPaTrend": {
+      "startPa": 82,
+      "latestPa": 154,
+      "changePa": 72
+    },
+    "bypassHours": 3.5,
+    "bypassShare": 2.1,
+    "hoodInterlockSuccessRate": 1.0,
+    "offlineCount": 0,
+    "dataCoverage": 0.98,
+    "openAnomalies": [
+      {
+        "rule": "FILTER_CLOGGED",
+        "severity": "WARN",
+        "status": "OPEN",
+        "openedAt": "2026-10-22T03:10:00Z"
+      }
+    ],
+    "recentAnomalies": []
+  }
+}

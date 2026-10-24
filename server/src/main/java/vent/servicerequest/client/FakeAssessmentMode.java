@@ -20,5 +20,7 @@ public enum FakeAssessmentMode {
     /** 첫 시도만 틀리고 재시도는 정상 */
     FLAKY,
     /** AI를 부를 수 없음 (예외) */
-    UNAVAILABLE
+    UNAVAILABLE,
+    /** 안전 거절 (다시 시도하지 않는 실패, #12) */
+    REFUSAL
 }

@@ -25,12 +25,16 @@ dependencies {
     implementation 'org.flywaydb:flyway-database-postgresql'
     runtimeOnly 'org.postgresql:postgresql'
     implementation 'org.eclipse.paho:org.eclipse.paho.mqttv5.client:1.2.5'
+    // AI 소견: Anthropic 공식 Java SDK (#12, ADR-0016)
+    implementation 'com.anthropic:anthropic-java:2.34.0'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
     testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.testcontainers:postgresql'
     testImplementation 'org.awaitility:awaitility'
+    // Claude 호출부 테스트용 가짜 HTTP 서버 (#12). SDK가 쓰는 OkHttp와 같은 버전
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
@@ -41,4 +45,16 @@ tasks.named('jar') {
 
 tasks.named('test') {
     useJUnitPlatform()
+}
+
+// AI 소견 평가 세트 (스펙 8.7, #12). 실제 Claude는 ANTHROPIC_API_KEY가 필요하고 비용이 나간다.
+// 예: ./gradlew :server:evalAssessment -Peval.client=fake   (채점 도구 점검)
+//     ./gradlew :server:evalAssessment -Peval.effort=low -Peval.label=opus-low
+tasks.register('evalAssessment', JavaExec) {
+    group = 'verification'
+    description = 'AI 소견 평가 세트를 돌려 1순위 원인 정답률을 docs/eval에 기록한다'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'vent.servicerequest.eval.AssessmentEvalRunner'
+    workingDir = rootProject.projectDir
+    systemProperties(project.properties.findAll { it.key.toString().startsWith('eval.') })
 }

@@ -61,3 +61,40 @@ docker compose exec mosquitto mosquitto_pub -h localhost -V mqttv5 -q 1 -u gw-s1
 - **장비별 인증서(TLS 클라이언트 인증)**: 비밀번호 대신 게이트웨이마다 인증서를 발급하고, 인증서의 이름을 계정으로 쓴다(`use_identity_as_username`). 공장 출고나 설치 때 넣고, 잃어버린 장비는 인증서를 폐기한다.
 - **비밀 관리**: 비밀번호·인증서 키는 비밀 관리 서비스(예: AWS Secrets Manager, Vault)에서 주입한다.
 - **현장이 많아지면**: ACL 파일을 손으로 고치지 않고 Mosquitto dynamic security 플러그인이나 DB 기반 인증 플러그인, 또는 매니지드 IoT 서비스(AWS IoT Core 등)의 정책으로 옮긴다. 설치 등록(QR) 때 계정과 권한이 함께 만들어지게 한다.
+
+## AI 소견 (#10~#12, 스펙 8장)
+
+A/S 신청이 들어오면 코드가 최근 7일 상황 요약을 계산하고, AI가 원인·조치·부품·고객 안내문 초안을 낸다. 검증기를 통과한 초안만 직원 판정 화면에 올라가고, 판정한 내용만 고객에게 확정된다(ADR-0005).
+
+### 실제 Claude 쓰기
+
+키는 환경변수로만 넘긴다. 저장소나 파일에 적지 않는다(`.env`는 `.gitignore`에 있다).
+
+```bash
+export ANTHROPIC_API_KEY=키값
+docker compose up -d
+```
+
+- 키가 있으면 Claude(`claude-opus-5-5`, effort `medium`), 없으면 가짜 AI로 자동으로 고른다(`VENT_ASSESSMENT_CLIENT=auto`). 시작 로그에 "AI 소견: …"으로 어느 쪽인지 남는다.
+- 테스트(`./gradlew :server:test`)는 키가 있어도 항상 가짜 AI를 쓴다. 비용은 평가 명령에서만 나간다.
+- 시연 중 인터넷이 안 되면 `VENT_ASSESSMENT_CLIENT=fake docker compose up -d`로 가짜 AI로 바꾼다. 실행 중에 자동으로 가짜 AI로 바꾸지는 않는다(가짜 소견을 실제로 착각하지 않게). Claude가 실패하면 "사람 확인 필요"가 된다.
+- 모델 바꾸기: `VENT_ASSESSMENT_MODEL`, `VENT_ASSESSMENT_RETRY_MODEL`(검증 실패 뒤 재시도 모델), `VENT_ASSESSMENT_EFFORT`. 거절 시 서버 재실행은 Opus 5.5·Opus 5·Sonnet 5.5·Fable 5.1에서만 동작한다(Haiku 5.5에는 없음).
+
+### AI 검증 기록 (평가 세트, 스펙 8.7)
+
+시나리오 5개(필터 막힘, 인원 과다, VEMC 미연동, 데이터 정상인데 답답함, 게이트웨이 장기 오프라인)의 상황 요약을 고정해 두고, AI가 1순위로 꼽은 원인 분류가 정답인지 센다. 시나리오마다 3번씩 돌린다. 모델이나 프롬프트를 바꾸면 다시 돌려 이 표에 한 줄 추가한다.
+
+```bash
+./gradlew :server:evalAssessment -Peval.client=fake                 # 채점 도구 점검 (비용 없음, 5/5가 정상)
+./gradlew :server:evalAssessment                                    # Claude Opus 5.5 medium (키 필요, 비용 발생)
+./gradlew :server:evalAssessment -Peval.effort=low -Peval.label=opus-low
+./gradlew :server:evalAssessment -Peval.model=claude-haiku-5-5 -Peval.retryModel=claude-opus-5-5 -Peval.label=haiku-to-opus
+```
+
+보고서는 `docs/eval/`에 남는다. 실행기는 운영과 같은 `application.yml` 설정을 쓰고, 모델·effort만 명령 인자로 바꾼다.
+
+| 날짜 | 구성 | 모델 (1차 → 재시도) | effort | 프롬프트 | 1순위 정답 | 검증 통과 | 평균 시간 | 추정 비용 |
+|---|---|---|---|---|---|---|---|---|
+| 2026-10-24 | fake | 가짜 AI | - | v1 | 15/15 | 15/15 | 0.0초 | $0.000 |
+
+- 실제 Claude 평가는 아직 돌리지 않았다(API 키 준비 전). 위 줄은 채점 도구가 맞게 동작하는지 가짜 AI로 확인한 결과다.

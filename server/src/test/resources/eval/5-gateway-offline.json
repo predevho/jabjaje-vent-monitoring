@@ -1,0 +1,49 @@
+{
+  "id": "5-gateway-offline",
+  "scenario": "게이트웨이 장기 오프라인",
+  "expected": [
+    "INSUFFICIENT_DATA"
+  ],
+  "customerMessage": "앱에 며칠째 기록이 안 보여요. 환기는 되는 것 같은데 잘 모르겠어요.",
+  "summary": {
+    "site": {
+      "region": "경기 안성시",
+      "floorAreaM2": 132.0,
+      "occupants": 4,
+      "targetAirflowCmh": 180,
+      "minimumAirflowCmh": 180,
+      "devices": [
+        {
+          "type": "VENTILATOR",
+          "model": "DOMEKT R 300V"
+        },
+        {
+          "type": "VEMC",
+          "model": "VEMC"
+        }
+      ]
+    },
+    "co2AvgPpm": 740,
+    "co2MaxPpm": 900,
+    "supplyToTargetRatio": 0.95,
+    "filterPaTrend": {
+      "startPa": 70,
+      "latestPa": 71,
+      "changePa": 1
+    },
+    "bypassHours": 0.2,
+    "bypassShare": 1.2,
+    "hoodInterlockSuccessRate": null,
+    "offlineCount": 2,
+    "dataCoverage": 0.08,
+    "openAnomalies": [
+      {
+        "rule": "GATEWAY_OFFLINE",
+        "severity": "CRITICAL",
+        "status": "OPEN",
+        "openedAt": "2026-10-18T07:00:00Z"
+      }
+    ],
+    "recentAnomalies": []
+  }
+}

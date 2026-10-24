@@ -12,13 +12,31 @@
  */
 import { useEffect, useState } from 'react'
 import { fetchCustomerReply, fetchServiceRequest } from '../api/serviceRequests.ts'
-import type { AiAssessment, CustomerReply, ServiceRequest, Verdict, VerdictField } from '../types/serviceRequest.ts'
+import type {
+  AiAssessment,
+  AssessmentCauseCategory,
+  CustomerReply,
+  ServiceRequest,
+  Verdict,
+  VerdictField,
+} from '../types/serviceRequest.ts'
 import ServiceRequestStatusBadge from './ServiceRequestStatusBadge.tsx'
 import VerdictForm from './VerdictForm.tsx'
 
 const POLL_INTERVAL_MS = 2_000
 
 const LIKELIHOOD: Record<string, string> = { HIGH: '높음', MEDIUM: '보통', LOW: '낮음' }
+
+const CATEGORY: Record<AssessmentCauseCategory, string> = {
+  FILTER_CLOGGED: '필터 막힘',
+  AIRFLOW_SHORTAGE: '풍량 부족',
+  BYPASS: '바이패스',
+  VEMC_NOT_LINKED: 'VEMC 미연동',
+  AIRTIGHTNESS: '기밀 불량',
+  TARGET_AIRFLOW_MISMATCH: '목표 풍량 불일치',
+  NO_EQUIPMENT_PROBLEM: '장비 문제 없음',
+  INSUFFICIENT_DATA: '데이터 부족',
+}
 
 const FIELD_LABEL: Record<VerdictField, string> = {
   CAUSES: '원인',
@@ -87,6 +105,7 @@ function AssessmentView({ assessment }: { assessment: AiAssessment }) {
               <ol>
                 {(result?.causes ?? []).map((cause) => (
                   <li key={cause.title}>
+                    {cause.category && <span className="badge badge-category">{CATEGORY[cause.category] ?? cause.category}</span>}{' '}
                     {cause.title} <span className="muted">· 가능성 {LIKELIHOOD[cause.likelihood] ?? cause.likelihood} · 근거 {cause.evidence.join(', ')}</span>
                   </li>
                 ))}

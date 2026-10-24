@@ -16,8 +16,8 @@ import vent.servicerequest.domain.AssessmentValidationError;
  *
  * <p>AI가 돌려준 글을 코드로 확인한다. 통과하지 못한 소견은 사람에게 넘긴다.
  * <ul>
- *   <li>형식: JSON인지, 필수 항목(원인 목록과 각 원인의 제목·가능성·근거, 조치, 부품, 방문 필요 여부, 고객 안내문)이
- *       있고 원인 목록이 비어 있지 않은지</li>
+ *   <li>형식: JSON인지, 필수 항목(원인 목록과 각 원인의 제목·가능성·분류·근거, 조치, 부품, 방문 필요 여부, 고객 안내문)이
+ *       있고 원인 목록이 비어 있지 않은지. 분류는 {@link AssessmentCauseCategory} 중 하나(#12)</li>
  *   <li>근거: 원인의 근거 지표가 이번 상황 요약에 값이 있는 지표인지 (지어낸 근거, 데이터 없는 근거)</li>
  *   <li>부품: 판매 부품 목록에 있는지 (없는 부품)</li>
  *   <li>고객 안내문: 금액(원, 천 원, 만 원), 무상·무료·공짜·비용 없음 약속, 보증·환불·보상 표현이 없는지. 고객 문의에 섞인 지시(프롬프트 인젝션)로
@@ -87,6 +87,9 @@ public class AssessmentValidator {
             }
             if (!LIKELIHOODS.contains(cause.path("likelihood").asText())) {
                 errors.add(new AssessmentValidationError("INVALID_FIELD", "가능성은 HIGH/MEDIUM/LOW 중 하나: " + cause.path("likelihood")));
+            }
+            if (!AssessmentCauseCategory.isKnown(cause.path("category").asText())) {
+                errors.add(new AssessmentValidationError("INVALID_FIELD", "원인 분류가 정해진 값이 아님: " + cause.path("category")));
             }
             JsonNode evidence = cause.path("evidence");
             if (!evidence.isArray() || evidence.isEmpty()) {

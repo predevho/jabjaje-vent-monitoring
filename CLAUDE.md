@@ -28,7 +28,7 @@ Create a layer folder only when the feature has a class for it (an empty `dto/re
 
 Inbound messages from devices (MQTT) are handled like HTTP requests but kept apart from them: the MQTT listener sits in the feature's `listener/` and the message shape in `dto/request/`. Infrastructure shared by several features (the MQTT client connection) lives in `vent/global/<topic>/`.
 
-Settings records (`@ConfigurationProperties`) live next to the code that reads them: a feature's own settings in that feature's `service/` or `rule/` (e.g. `TelemetryQualityProperties`, `FilterCloggedProperties`), shared infrastructure settings in `vent/global/<topic>/` (e.g. `MqttBrokerProperties`).
+Settings records (`@ConfigurationProperties`) live next to the code that reads them: a feature's own settings in that feature's `service/`, `rule/`, or `client/` (e.g. `TelemetryQualityProperties`, `FilterCloggedProperties`, `ClaudeAssessmentProperties`), shared infrastructure settings in `vent/global/<topic>/` (e.g. `MqttBrokerProperties`).
 
 Name types after the feature they belong to (`TelemetryIngestResult`, not `IngestResult`) so a name stays unambiguous when another feature grows a similar type.
 

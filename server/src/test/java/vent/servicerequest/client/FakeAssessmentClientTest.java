@@ -41,6 +41,7 @@ class FakeAssessmentClientTest {
 
         assertThat(validation.passed()).isTrue();
         assertThat(validation.parsed().at("/causes/0/title").asText()).contains("필터 막힘");
+        assertThat(validation.parsed().at("/causes/0/category").asText()).isEqualTo("FILTER_CLOGGED");
         assertThat(validation.parsed().at("/parts/0").asText()).isEqualTo("DOMEKT R 300V 교체 필터 세트");
     }
 
@@ -62,11 +63,11 @@ class FakeAssessmentClientTest {
 
         String raw = client.assess(input(summary)).rawText();
 
-        assertThat(raw).contains("목표 풍량", "TAB");
+        assertThat(raw).contains("목표 풍량", "TAB", "TARGET_AIRFLOW_MISMATCH");
     }
 
     private static AssessmentInput input(SituationSummary summary) {
-        return new AssessmentInput(List.of(), List.of(), PARTS, summary, "<customer_message>답답해요</customer_message>", 1);
+        return new AssessmentInput(AssessmentPrompt.VERSION, PARTS, summary, "<customer_message>답답해요</customer_message>", 1);
     }
 
     private static SituationSummary summary(double coverage, double supplyRatio, SituationFilterPaTrend filter, Double hoodRate, int co2) {

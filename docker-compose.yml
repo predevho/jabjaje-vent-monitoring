@@ -61,6 +61,13 @@ services:
       # A/S 신청 AI 소견 (#10). 상황 요약 기간은 7일이지만, 막 띄운 시연에는 데이터가 몇 분뿐이라 데이터 부족으로 판단을
       # 보류한다. 시연 때는 짧게: VENT_ASSESSMENT_WINDOW=15m docker compose up -d
       VENT_ASSESSMENT_WINDOW: ${VENT_ASSESSMENT_WINDOW:-7d}
+      # 실제 Claude (#12): 내 컴퓨터의 ANTHROPIC_API_KEY를 넘긴다(키를 이 파일에 적지 않는다). 없으면 가짜 AI.
+      # 시연 중 인터넷이 안 되면: VENT_ASSESSMENT_CLIENT=fake docker compose up -d
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      VENT_ASSESSMENT_CLIENT: ${VENT_ASSESSMENT_CLIENT:-auto}
+      VENT_ASSESSMENT_CLAUDE_MODEL: ${VENT_ASSESSMENT_MODEL:-claude-opus-5-5}
+      VENT_ASSESSMENT_CLAUDE_RETRYMODEL: ${VENT_ASSESSMENT_RETRY_MODEL:-claude-opus-5-5}
+      VENT_ASSESSMENT_CLAUDE_EFFORT: ${VENT_ASSESSMENT_EFFORT:-medium}
       # 가짜 AI 응답 방식. 검증 실패 시연: VENT_ASSESSMENT_FAKE_MODE=bad-part docker compose up -d
       VENT_ASSESSMENT_FAKE_MODE: ${VENT_ASSESSMENT_FAKE_MODE:-normal}
     ports:

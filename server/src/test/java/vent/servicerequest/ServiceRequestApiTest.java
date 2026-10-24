@@ -156,11 +156,23 @@ class ServiceRequestApiTest extends MqttIntegrationTest {
     }
 
     @Test
+    @DisplayName("안전 거절은 다시 해도 같으니 재시도 없이 바로 사람 확인 필요가 된다 (#12)")
+    void refusalIsNotRetried() throws Exception {
+        fakeClient.useMode(FakeAssessmentMode.REFUSAL);
+        long id = create();
+
+        JsonNode detail = awaitStatus(id, "NEEDS_HUMAN");
+        assertThat(detail.path("assessments")).hasSize(1);
+        assertThat(detail.at("/assessments/0/validationErrors/0/code").asText()).isEqualTo("REFUSAL");
+        assertThat(detail.at("/assessments/0/model").asText()).isEqualTo("fake-assessment-1");
+    }
+
+    @Test
     @DisplayName("접수된 채 오래 남은 신청은 재처리에서 다시 맡아 소견을 만든다 (서버 재시작 대비)")
     void pendingRequestIsRetried() throws Exception {
         Long id = jdbcTemplate.queryForObject("""
                 INSERT INTO service_request (site_id, customer_message, status, created_at)
-                VALUES (?, '환기가 약해요', 'RECEIVED', now() - INTERVAL '5 minutes') RETURNING id
+                VALUES (?, '환기가 약해요', 'RECEIVED', now() - INTERVAL '10 minutes') RETURNING id
                 """, Long.class, SITE);
 
         assessmentService.retryPending(OffsetDateTime.now());

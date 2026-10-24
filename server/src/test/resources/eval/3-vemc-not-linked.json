@@ -1,0 +1,49 @@
+{
+  "id": "3-vemc-not-linked",
+  "scenario": "후드 ON에도 급기 변화 없음",
+  "expected": [
+    "VEMC_NOT_LINKED"
+  ],
+  "customerMessage": "요리할 때 후드를 켜도 냄새가 잘 안 빠지고 집 안에 계속 남아요.",
+  "summary": {
+    "site": {
+      "region": "경기 안성시",
+      "floorAreaM2": 132.0,
+      "occupants": 4,
+      "targetAirflowCmh": 180,
+      "minimumAirflowCmh": 180,
+      "devices": [
+        {
+          "type": "VENTILATOR",
+          "model": "DOMEKT R 300V"
+        },
+        {
+          "type": "VEMC",
+          "model": "VEMC"
+        }
+      ]
+    },
+    "co2AvgPpm": 720,
+    "co2MaxPpm": 980,
+    "supplyToTargetRatio": 0.97,
+    "filterPaTrend": {
+      "startPa": 68,
+      "latestPa": 74,
+      "changePa": 6
+    },
+    "bypassHours": 3.5,
+    "bypassShare": 2.1,
+    "hoodInterlockSuccessRate": 0.0,
+    "offlineCount": 0,
+    "dataCoverage": 0.98,
+    "openAnomalies": [
+      {
+        "rule": "VEMC_NO_RESPONSE",
+        "severity": "WARN",
+        "status": "OPEN",
+        "openedAt": "2026-10-23T18:20:00Z"
+      }
+    ],
+    "recentAnomalies": []
+  }
+}

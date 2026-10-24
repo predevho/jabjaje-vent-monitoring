@@ -22,7 +22,7 @@ class AssessmentValidatorTest {
     private static final Set<String> METRICS = Set.of("filterPaTrend", "supplyToTargetRatio", "co2AvgPpm", "dataCoverage");
     private static final List<String> PARTS = List.of("DOMEKT R 300V 교체 필터 세트", "VEMC 신호 케이블");
     private static final String VALID = """
-            {"causes": [{"title": "필터 막힘으로 급기 부족", "likelihood": "HIGH",
+            {"causes": [{"title": "필터 막힘으로 급기 부족", "likelihood": "HIGH", "category": "FILTER_CLOGGED",
                          "evidence": ["filterPaTrend", "supplyToTargetRatio"]}],
              "technicianActions": ["필터 교체", "교체 후 풍량 재측정"],
              "parts": ["DOMEKT R 300V 교체 필터 세트"],
@@ -76,6 +76,8 @@ class AssessmentValidatorTest {
         assertThat(codes(validate("{\"causes\": ["))).containsExactly("INVALID_JSON");
         assertThat(codes(validate(VALID.replace("\"customerReply\"", "\"reply\"")))).containsExactly("MISSING_FIELD");
         assertThat(codes(validate(VALID.replace("\"HIGH\"", "\"VERY_HIGH\"")))).containsExactly("INVALID_FIELD");
+        // 원인 분류는 정해진 값만 (#12)
+        assertThat(codes(validate(VALID.replace("\"FILTER_CLOGGED\"", "\"FILTER_DIRTY\"")))).containsExactly("INVALID_FIELD");
         assertThat(codes(validate(VALID.replaceFirst("(?s)\\[\\{\"title\".*?\\}\\]", "[]")))).containsExactly("MISSING_FIELD");
     }
 

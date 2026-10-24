@@ -1,0 +1,55 @@
+{
+  "id": "2-too-many-occupants",
+  "scenario": "인원 과다로 CO2 상승, 장비는 정상",
+  "expected": [
+    "TARGET_AIRFLOW_MISMATCH"
+  ],
+  "customerMessage": "주말에 가족들이 모이면 집이 너무 답답하고 머리가 아파요. 평소에는 괜찮아요.",
+  "summary": {
+    "site": {
+      "region": "경기 안성시",
+      "floorAreaM2": 132.0,
+      "occupants": 4,
+      "targetAirflowCmh": 180,
+      "minimumAirflowCmh": 180,
+      "devices": [
+        {
+          "type": "VENTILATOR",
+          "model": "DOMEKT R 300V"
+        },
+        {
+          "type": "VEMC",
+          "model": "VEMC"
+        }
+      ]
+    },
+    "co2AvgPpm": 1180,
+    "co2MaxPpm": 1720,
+    "supplyToTargetRatio": 0.98,
+    "filterPaTrend": {
+      "startPa": 68,
+      "latestPa": 74,
+      "changePa": 6
+    },
+    "bypassHours": 3.5,
+    "bypassShare": 2.1,
+    "hoodInterlockSuccessRate": 1.0,
+    "offlineCount": 0,
+    "dataCoverage": 0.98,
+    "openAnomalies": [],
+    "recentAnomalies": [
+      {
+        "rule": "CO2_HIGH",
+        "severity": "CRITICAL",
+        "status": "RESOLVED",
+        "openedAt": "2026-10-19T11:40:00Z"
+      },
+      {
+        "rule": "CO2_HIGH",
+        "severity": "WARN",
+        "status": "RESOLVED",
+        "openedAt": "2026-10-20T12:05:00Z"
+      }
+    ]
+  }
+}

@@ -11,7 +11,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param window            상황 요약 기간 (최근 7일)
  * @param telemetryInterval 측정 주기. 데이터 충분도의 분모(받았어야 할 측정값 수)와 바이패스 시간을 셀 때 쓴다
  * @param maxAttempts       검증 실패 시 재시도를 포함한 시도 수 (스펙 8.5: 1회 재시도 → 2)
- * @param callTimeout       AI 호출 한 번의 최대 대기 시간 (스펙 8.6). AI 구현이 이 시간을 넘기면 실패로 끝내야 한다
+ * @param callTimeout       시도 한 번(SDK 재시도 포함)의 최대 시간 (스펙 8.6). AI 구현은 이 안에 끝나야 한다(Claude 설정은
+ *                          시작할 때 검사)
  * @param pendingAfter      접수된 채 이만큼 지난 신청은 재처리 스케줄러가 다시 맡는다. 시도를 모두 마칠 시간
  *                          (callTimeout × maxAttempts)보다 길어야 같은 신청을 두 곳이 처리하지 않는다
  * @param parts             판매 중인 교체 부품 이름. AI 입력과 검증에 같이 쓴다
@@ -22,8 +23,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 public record AssessmentProperties(@DefaultValue("7d") Duration window,
                                    @DefaultValue("30s") Duration telemetryInterval,
                                    @DefaultValue("2") int maxAttempts,
-                                   @DefaultValue("30s") Duration callTimeout,
-                                   @DefaultValue("2m") Duration pendingAfter,
+                                   @DefaultValue("3m") Duration callTimeout,
+                                   @DefaultValue("7m") Duration pendingAfter,
                                    @DefaultValue List<String> parts) {
 
     public AssessmentProperties {

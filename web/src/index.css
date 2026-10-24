@@ -456,3 +456,9 @@ tr.selected {
   border-top: 1px dashed #d1d9e0;
   padding-top: 8px;
 }
+
+/* 원인 분류 (#12) */
+.badge-category {
+  background: #fbefff;
+  color: #6e40c9;
+}

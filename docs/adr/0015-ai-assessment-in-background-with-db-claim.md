@@ -16,7 +16,7 @@ WHERE id = :id AND status = 'RECEIVED'
   AND (assessment_started_at IS NULL OR assessment_started_at < :now - 2분)
 ```
 
-결과가 1인 쪽만 처리한다. PostgreSQL은 같은 행의 UPDATE를 한 줄로 세우므로 한 곳만 1을 받는다. 맡은 서버가 도중에 꺼지면 2분 뒤 다른 쪽이 다시 맡는다. 이 2분은 AI 호출 대기 시간(30초) × 시도 수(2)보다 길어야 한다. 짧으면 아직 처리 중인 신청을 다시 맡는다. 앱을 시작할 때 설정을 검사한다. 그래도 겹치면 `UNIQUE(service_request_id, attempt)`가 두 번째 저장을 막고, 막힌 쪽은 손을 뗀다.
+결과가 1인 쪽만 처리한다. PostgreSQL은 같은 행의 UPDATE를 한 줄로 세우므로 한 곳만 1을 받는다. 맡은 서버가 도중에 꺼지면 2분 뒤 다른 쪽이 다시 맡는다. 이 2분은 AI 호출 대기 시간(30초) × 시도 수(2)보다 길어야 한다. (#12에서 실제 Claude의 생각 시간과 SDK 재시도에 맞춰 시도 한 번 최대 3분, 재처리 기준 7분으로 늘렸다. ADR-0016) 짧으면 아직 처리 중인 신청을 다시 맡는다. 앱을 시작할 때 설정을 검사한다. 그래도 겹치면 `UNIQUE(service_request_id, attempt)`가 두 번째 저장을 막고, 막힌 쪽은 손을 뗀다.
 
 AI를 부르는 동안에는 DB 트랜잭션을 열어 두지 않는다. 맡기, 시도 저장, 상태 변경을 각각 짧은 트랜잭션으로 나눈다.
 

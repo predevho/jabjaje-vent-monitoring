@@ -30,6 +30,11 @@ public record SituationSummary(SituationSiteProfile site, Integer co2AvgPpm, Int
                                Double hoodInterlockSuccessRate, int offlineCount, double dataCoverage,
                                List<SituationAnomaly> openAnomalies, List<SituationAnomaly> recentAnomalies) {
 
+    /** 상황 요약의 지표 이름 전체 (#12). 구조화 출력 스키마가 근거로 허용하는 이름이다 */
+    public static final List<String> METRIC_KEYS = List.of("co2AvgPpm", "co2MaxPpm", "supplyToTargetRatio", "filterPaTrend",
+            "bypassHours", "bypassShare", "hoodInterlockSuccessRate", "offlineCount", "dataCoverage", "openAnomalies",
+            "recentAnomalies");
+
     /** 값이 있어 AI 소견의 근거로 쓸 수 있는 지표 이름. 데이터가 없는 지표를 근거로 대면 검증에서 걸린다 */
     public Set<String> availableMetricKeys() {
         Set<String> keys = new LinkedHashSet<>();
