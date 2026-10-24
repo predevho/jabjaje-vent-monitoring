@@ -9,6 +9,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.OrderBy;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 import vent.gateway.domain.Gateway;
@@ -24,6 +25,10 @@ import vent.site.domain.type.TargetAirflowSource;
  */
 @Entity
 public class Site {
+
+    private static final BigDecimal CMH_PER_OCCUPANT = BigDecimal.valueOf(30);
+    private static final BigDecimal CEILING_HEIGHT_M = new BigDecimal("2.5");
+    private static final BigDecimal AIR_CHANGES_PER_HOUR = new BigDecimal("0.6");
 
     @Id
     private Long id;
@@ -78,6 +83,23 @@ public class Site {
 
     public TargetAirflowSource getTargetAirflowSource() {
         return targetAirflowSource;
+    }
+
+    /**
+     * 최소 환기량 (CMH, 스펙 5.3, 회사 환기량 산정 기준). 인원 × 30CMH와 바닥면적 × 층고 2.5m × 0.6회/h 중 큰 값을
+     * 정수로 올린다(예: 148.5 → 149). 저장하지 않고 인원·면적으로 계산한다.
+     *
+     * @since 2026-10-24 (#5)
+     */
+    public int minimumAirflowCmh() {
+        return minimumAirflowCmh(occupants, floorAreaM2);
+    }
+
+    /** {@link #minimumAirflowCmh()}의 계산식. 엔티티 없이 단위 테스트하려고 따로 둔다. */
+    static int minimumAirflowCmh(int occupants, BigDecimal floorAreaM2) {
+        BigDecimal byOccupants = CMH_PER_OCCUPANT.multiply(BigDecimal.valueOf(occupants));
+        BigDecimal byArea = floorAreaM2.multiply(CEILING_HEIGHT_M).multiply(AIR_CHANGES_PER_HOUR);
+        return byOccupants.max(byArea).setScale(0, RoundingMode.CEILING).intValueExact();
     }
 
     public Gateway getGateway() {

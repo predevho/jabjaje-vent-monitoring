@@ -1,5 +1,6 @@
 package vent.telemetry.repository;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -33,9 +34,10 @@ public interface TelemetryRepository extends JpaRepository<Telemetry, Long>, Tel
     List<Telemetry> findByDeviceIdOrderByMeasuredAtDesc(String deviceId, Limit limit);
 
     /**
-     * 한 장비의 측정값 중 그 품질인 것만 측정 시각이 늦은 것부터 가져온다. 이상 규칙이 OK 측정값만 볼 때 쓴다.
+     * 한 장비의 그 품질 측정값 중 측정 시각이 since 이후인 것을 늦은 것부터 가져온다. 이상 규칙이 OK 측정값만 볼 때 쓴다.
      *
-     * @since 2026-10-24 (#4)
+     * @since 2026-10-24 (#5)
      */
-    List<Telemetry> findByDeviceIdAndQualityOrderByMeasuredAtDesc(String deviceId, TelemetryQuality quality, Limit limit);
+    List<Telemetry> findByDeviceIdAndQualityAndMeasuredAtAfterOrderByMeasuredAtDesc(
+            String deviceId, TelemetryQuality quality, OffsetDateTime since);
 }

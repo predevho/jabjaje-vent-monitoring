@@ -1,5 +1,6 @@
 package vent.anomaly.rule;
 
+import java.time.Duration;
 import org.springframework.stereotype.Component;
 import vent.anomaly.domain.type.AnomalyRuleName;
 import vent.anomaly.domain.type.AnomalySeverity;
@@ -30,6 +31,12 @@ public class FilterCloggedRule implements DeviceAnomalyRule {
     @Override
     public AnomalyRuleName name() {
         return AnomalyRuleName.FILTER_CLOGGED;
+    }
+
+    /** 최신 값 하나만 본다. */
+    @Override
+    public Duration lookback() {
+        return Duration.ZERO;
     }
 
     @Override

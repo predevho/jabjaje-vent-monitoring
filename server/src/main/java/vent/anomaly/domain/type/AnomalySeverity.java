@@ -12,5 +12,14 @@ public enum AnomalySeverity {
     /** 주의: 점검이 필요한 것 */
     WARN,
     /** 심각: 바로 조치가 필요한 것 */
-    CRITICAL
+    CRITICAL;
+
+    /**
+     * 이 심각도가 다른 것보다 무거운지. 선언 순서(정보 → 주의 → 심각)가 곧 무게 순서다.
+     *
+     * @since 2026-10-24 (#5)
+     */
+    public boolean isMoreSevereThan(AnomalySeverity other) {
+        return compareTo(other) > 0;
+    }
 }

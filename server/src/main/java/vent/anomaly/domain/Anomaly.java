@@ -80,6 +80,21 @@ public class Anomaly {
         return anomaly;
     }
 
+    /**
+     * 열린 이상의 심각도를 올리고 설명을 바꾼다. 더 무거운 심각도일 때만 바꾸고, 해결될 때까지 내리지 않는다 (#5).
+     *
+     * @return 바꿨으면 true
+     * @since 2026-10-24 (#5)
+     */
+    public boolean escalate(AnomalySeverity newSeverity, String newMessage) {
+        if (status != AnomalyStatus.OPEN || !newSeverity.isMoreSevereThan(severity)) {
+            return false;
+        }
+        severity = newSeverity;
+        message = newMessage;
+        return true;
+    }
+
     /** 해결로 닫는다. 이미 해결된 이상이면 아무것도 하지 않는다. */
     public void resolve(OffsetDateTime resolvedAt) {
         if (status == AnomalyStatus.OPEN) {

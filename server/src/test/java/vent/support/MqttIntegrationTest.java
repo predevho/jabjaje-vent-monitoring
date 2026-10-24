@@ -20,6 +20,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
@@ -85,6 +86,9 @@ public abstract class MqttIntegrationTest {
     @Autowired
     protected MqttClientManager mqttClientManager;
 
+    @Autowired
+    protected JdbcTemplate jdbcTemplate;
+
     @BeforeAll
     static void connectTestGateway() throws Exception {
         gateway = new MqttClient(brokerUri(), "test-gateway-" + UUID.randomUUID(), new MemoryPersistence());
@@ -144,6 +148,25 @@ public abstract class MqttIntegrationTest {
                  "co2Ppm": %d, "tempC": 23.4, "humidityPct": 48,
                  "supplyCmh": 205, "exhaustCmh": 200, "filterPa": %d, "bypass": false}
                 """.formatted(extraFields, messageId, deviceId, measuredAt, co2Ppm, filterPa);
+    }
+
+    /**
+     * 테스트 전용 환기장치를 시드 현장에 등록한다(이미 있으면 그대로). 다른 테스트 클래스가 시드 장비에 남긴 측정값과
+     * 섞이면 안 되는 "N분 지속" 테스트가 쓴다(#5).
+     */
+    protected void registerTestVentilator(long siteId, String gatewayId, String deviceId) {
+        jdbcTemplate.update("""
+                INSERT INTO device (id, site_id, gateway_id, type, model)
+                VALUES (?, ?, ?, 'VENTILATOR', 'DOMEKT R 300V')
+                ON CONFLICT (id) DO NOTHING
+                """, deviceId, siteId, gatewayId);
+    }
+
+    /** 이 테스트가 넣은 측정값을 지운다. 미래 시각 측정값이 남으면 뒤 테스트의 "최신 측정값"이 바뀐다(#5). */
+    protected void deleteTelemetry(String... messageIds) {
+        for (String messageId : messageIds) {
+            jdbcTemplate.update("DELETE FROM telemetry WHERE message_id = ?::uuid", messageId);
+        }
     }
 
     /** 초 단위로 자른 지금 시각(UTC). 응답과 문자열로 비교하기 쉽게 자른다. */

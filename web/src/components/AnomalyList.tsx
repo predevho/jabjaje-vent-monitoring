@@ -11,6 +11,9 @@ import type { Anomaly, AnomalyRuleName, AnomalySeverity } from '../types/anomaly
 
 const RULE_LABELS: Record<AnomalyRuleName, string> = {
   FILTER_CLOGGED: '필터 막힘',
+  CO2_HIGH: 'CO2 과다',
+  AIRFLOW_BELOW_TARGET: '목표 풍량 미달',
+  BYPASS_TOO_LONG: '바이패스 지속',
   GATEWAY_OFFLINE: '게이트웨이 오프라인',
 }
 

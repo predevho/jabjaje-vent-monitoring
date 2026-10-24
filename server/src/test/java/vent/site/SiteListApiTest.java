@@ -56,16 +56,20 @@ class SiteListApiTest {
                 .andExpect(jsonPath("$[0].occupants").value(4))
                 .andExpect(jsonPath("$[0].targetAirflowCmh").value(210))
                 .andExpect(jsonPath("$[0].targetAirflowSource").value("TAB"))
+                // 최소 환기량: 4명 × 30 = 120 < 132m² × 1.5 = 198. TAB 값(210)이 있어 목표 풍량과 다르다
+                .andExpect(jsonPath("$[0].minimumAirflowCmh").value(198))
 
                 // 안성: TAB 값이 없어 목표 풍량 = 최소 환기량(99m² × 2.5m × 0.6회/h = 148.5 → 올림 149)
                 .andExpect(jsonPath("$[1].name").value("안성 현장"))
                 .andExpect(jsonPath("$[1].targetAirflowCmh").value(149))
                 .andExpect(jsonPath("$[1].targetAirflowSource").value("MINIMUM_AIRFLOW"))
+                .andExpect(jsonPath("$[1].minimumAirflowCmh").value(149))
 
                 // 서대문: 바닥면적이 커서 450V 모델(165m² × 2.5m × 0.6회/h = 247.5 → 올림 248)
                 .andExpect(jsonPath("$[2].name").value("서대문 현장"))
                 .andExpect(jsonPath("$[2].targetAirflowCmh").value(248))
-                .andExpect(jsonPath("$[2].targetAirflowSource").value("MINIMUM_AIRFLOW"));
+                .andExpect(jsonPath("$[2].targetAirflowSource").value("MINIMUM_AIRFLOW"))
+                .andExpect(jsonPath("$[2].minimumAirflowCmh").value(248));
 
         // 현장마다 게이트웨이 1개(연결 전), VEMC 1대, 열회수 환기장치 1대
         String[] ventilatorModels = {"DOMEKT R 300V", "DOMEKT R 300V", "DOMEKT R 450V"};

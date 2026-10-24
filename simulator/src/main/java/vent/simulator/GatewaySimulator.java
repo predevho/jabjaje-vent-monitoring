@@ -14,6 +14,7 @@ import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import org.eclipse.paho.mqttv5.client.IMqttToken;
 import org.eclipse.paho.mqttv5.client.MqttCallback;
 import org.eclipse.paho.mqttv5.client.MqttClient;
@@ -196,26 +197,16 @@ public class GatewaySimulator {
     }
 
     /**
-     * 필터 막힘 시나리오를 켠다. 생성기는 게이트웨이 스레드에서만 쓰므로 그 스레드에 맡긴다.
+     * 측정값 시나리오를 켜거나 끈다(필터 막힘 #4, CO2·풍량·바이패스 #5). 생성기는 게이트웨이 스레드에서만 쓰므로 그 스레드에 맡긴다.
      *
-     * @since 2026-10-24 (#4)
+     * @param label  로그에 남길 시나리오 이름
+     * @param change 생성기에 적용할 변경
+     * @since 2026-10-24 (#5)
      */
-    public void clogFilter() {
+    public void changeTelemetry(String label, Consumer<TelemetryGenerator> change) {
         worker.execute(() -> {
-            generator.clogFilter();
-            Log.info("[%s] 시나리오: 필터 막힘 시작", site.gatewayId());
-        });
-    }
-
-    /**
-     * 필터 교체 시나리오: 차압이 새 필터 수준으로 돌아간다.
-     *
-     * @since 2026-10-24 (#4)
-     */
-    public void replaceFilter() {
-        worker.execute(() -> {
-            generator.replaceFilter();
-            Log.info("[%s] 시나리오: 필터 교체", site.gatewayId());
+            change.accept(generator);
+            Log.info("[%s] 시나리오: %s", site.gatewayId(), label);
         });
     }
 

@@ -43,6 +43,8 @@ export interface Site {
   occupants: number
   targetAirflowCmh: number
   targetAirflowSource: TargetAirflowSource
+  /** 최소 환기량(CMH). 인원·면적으로 서버가 계산한다 (스펙 5.3, #5) */
+  minimumAirflowCmh: number
   gateway: Gateway | null
   devices: Device[]
 }

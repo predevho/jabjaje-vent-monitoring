@@ -95,11 +95,16 @@ class TelemetryIngestApiTest extends MqttIntegrationTest {
         publish("2", "vent-s2", telemetryJson(okId, "vent-s2", now().plusMinutes(1), 820, ""));
         publish("2", "vent-s2", telemetryJson(skewedId, "vent-s2", now().plusMinutes(30), 820, ""));
 
-        awaitStored("vent-s2", skewedId);
-        mockMvc.perform(get("/api/devices/vent-s2/telemetry"))
-                .andExpect(jsonPath("$[?(@.messageId == '" + skewedId + "')].quality", contains("CLOCK_SKEW")));
-        mockMvc.perform(get("/api/telemetry/latest"))
-                .andExpect(jsonPath("$[?(@.deviceId == 'vent-s2')].messageId", contains(okId)));
+        try {
+            awaitStored("vent-s2", skewedId);
+            mockMvc.perform(get("/api/devices/vent-s2/telemetry"))
+                    .andExpect(jsonPath("$[?(@.messageId == '" + skewedId + "')].quality", contains("CLOCK_SKEW")));
+            mockMvc.perform(get("/api/telemetry/latest"))
+                    .andExpect(jsonPath("$[?(@.deviceId == 'vent-s2')].messageId", contains(okId)));
+        } finally {
+            // 미래 시각 측정값이 남으면 뒤에 도는 테스트(필터 막힘, #4)의 최신 값이 이 값이 된다.
+            deleteTelemetry(okId, skewedId);
+        }
     }
 
     @Test

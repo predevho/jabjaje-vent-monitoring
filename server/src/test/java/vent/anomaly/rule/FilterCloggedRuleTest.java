@@ -73,7 +73,7 @@ class FilterCloggedRuleTest {
     @Test
     @DisplayName("판단할 측정값이 없으면 아무것도 바꾸지 않는다")
     void noReadingsLeavesStateUnchanged() {
-        assertThat(rule.evaluate(new AnomalyRuleInput("vent-s1", "DOMEKT R 300V", List.of())).kind())
+        assertThat(rule.evaluate(new AnomalyRuleInput("vent-s1", "DOMEKT R 300V", 200, List.of())).kind())
                 .isEqualTo(AnomalyRuleOutcome.Kind.UNCHANGED);
     }
 
@@ -85,6 +85,7 @@ class FilterCloggedRuleTest {
     }
 
     private static AnomalyRuleInput readings(String model, int filterPa) {
-        return new AnomalyRuleInput("vent-s1", model, List.of(new AnomalyRuleTelemetry(MEASURED_AT, filterPa)));
+        return new AnomalyRuleInput("vent-s1", model, 200,
+                List.of(new AnomalyRuleTelemetry(MEASURED_AT, 800, 200, filterPa, false, false)));
     }
 }

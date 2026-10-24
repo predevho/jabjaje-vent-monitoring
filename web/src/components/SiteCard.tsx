@@ -46,6 +46,7 @@ export default function SiteCard({ site, ventilator, telemetry, recentTelemetry,
       </div>
       <div className="muted">
         {site.region} · {site.floorAreaM2}m² · {site.occupants}명 · 목표 풍량 {site.targetAirflowCmh} CMH ({targetLabel})
+        {site.targetAirflowSource === 'TAB' && ` · 최소 환기량 ${site.minimumAirflowCmh} CMH`}
       </div>
       <div className="muted">열회수 환기장치 {ventilator ? `${ventilator.model} (${ventilator.id})` : '없음'}</div>
 

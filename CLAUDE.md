@@ -14,7 +14,7 @@ vent/<feature>/
 ├── listener/        Message entry points (MQTT subscriptions, Spring events from other features). Same rules as controller.
 ├── scheduler/       Timed entry points (@Scheduled). Same rules as controller: call one service method, no logic.
 ├── service/         Use cases. Owns @Transactional boundaries.
-├── rule/            Decision classes: input record in, outcome out. Only their own settings record is injected (no repositories, no DB). Each has a unit test.
+├── rule/            Decision classes: input record in, outcome out. Only settings records are injected (no repositories, no DB). Each has a unit test.
 ├── repository/      Spring Data JPA repositories (one per aggregate root). Native SQL only where PostgreSQL features are needed.
 ├── domain/          JPA entities, one file per table.
 │   └── type/        Enums used by the entities (states, kinds, sources).

@@ -38,6 +38,19 @@ vent:
       model-thresholds-pa:
         "[DOMEKT R 300V]": 150
         "[DOMEKT R 450V]": 150
+    # "N분 지속" 규칙 (스펙 6.1, #5). 지속 시간(lasting)은 시연 때 Docker Compose 환경변수로 줄인다.
+    continuity:
+      max-gap: 2m
+    co2-high:
+      raise-ppm: 1000
+      critical-ppm: 1500
+      clear-ppm: 900
+      lasting: 10m
+    airflow-below-target:
+      ratio: 0.8
+      lasting: 30m
+    bypass-too-long:
+      lasting: 60m
   gateway:
     # 게이트웨이 연결 상태 기준 (스펙 6.3, #6). 시연에서는 offline-after를 짧게 바꿔 쓴다.
     connection:

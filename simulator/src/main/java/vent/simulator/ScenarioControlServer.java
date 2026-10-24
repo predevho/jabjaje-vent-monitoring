@@ -19,6 +19,12 @@ import java.util.stream.Collectors;
  * <pre>
  * POST /sites/{현장ID}/filter-clog     필터 막힘 시작
  * POST /sites/{현장ID}/filter-replace  필터 교체
+ * POST /sites/{현장ID}/co2-high        CO2 상승 (1,600ppm까지, #5)
+ * POST /sites/{현장ID}/co2-normal      CO2 정상
+ * POST /sites/{현장ID}/airflow-low     풍량 저하 (목표 풍량의 약 60%, #5)
+ * POST /sites/{현장ID}/airflow-normal  풍량 정상
+ * POST /sites/{현장ID}/bypass-on       바이패스 켜짐 (#5)
+ * POST /sites/{현장ID}/bypass-off      바이패스 꺼짐
  * POST /sites/{현장ID}/network-down    네트워크 끊김 (Last Will, #6)
  * POST /sites/{현장ID}/network-up      네트워크 복구 (#6)
  * GET  /health                         동작 확인
@@ -31,11 +37,17 @@ import java.util.stream.Collectors;
 public final class ScenarioControlServer {
 
     /** 시나리오 이름 → 게이트웨이에서 실행할 동작 */
-    private static final Map<String, Consumer<GatewaySimulator>> SCENARIOS = Map.of(
-            "filter-clog", GatewaySimulator::clogFilter,
-            "filter-replace", GatewaySimulator::replaceFilter,
-            "network-down", GatewaySimulator::networkDown,
-            "network-up", GatewaySimulator::networkUp);
+    private static final Map<String, Consumer<GatewaySimulator>> SCENARIOS = Map.ofEntries(
+            Map.entry("filter-clog", g -> g.changeTelemetry("필터 막힘 시작", TelemetryGenerator::clogFilter)),
+            Map.entry("filter-replace", g -> g.changeTelemetry("필터 교체", TelemetryGenerator::replaceFilter)),
+            Map.entry("co2-high", g -> g.changeTelemetry("CO2 상승", TelemetryGenerator::raiseCo2)),
+            Map.entry("co2-normal", g -> g.changeTelemetry("CO2 정상", TelemetryGenerator::normalizeCo2)),
+            Map.entry("airflow-low", g -> g.changeTelemetry("풍량 저하", TelemetryGenerator::lowerAirflow)),
+            Map.entry("airflow-normal", g -> g.changeTelemetry("풍량 정상", TelemetryGenerator::restoreAirflow)),
+            Map.entry("bypass-on", g -> g.changeTelemetry("바이패스 켜짐", t -> t.setBypass(true))),
+            Map.entry("bypass-off", g -> g.changeTelemetry("바이패스 꺼짐", t -> t.setBypass(false))),
+            Map.entry("network-down", GatewaySimulator::networkDown),
+            Map.entry("network-up", GatewaySimulator::networkUp));
 
     private final HttpServer server;
     private final Map<String, GatewaySimulator> gatewaysBySiteId;
