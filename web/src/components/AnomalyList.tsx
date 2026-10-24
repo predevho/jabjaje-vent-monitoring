@@ -15,6 +15,7 @@ const RULE_LABELS: Record<AnomalyRuleName, string> = {
   AIRFLOW_BELOW_TARGET: '목표 풍량 미달',
   BYPASS_TOO_LONG: '바이패스 지속',
   GATEWAY_OFFLINE: '게이트웨이 오프라인',
+  VEMC_NO_RESPONSE: 'VEMC 무반응',
 }
 
 const SEVERITY_LABELS: Record<AnomalySeverity, string> = {

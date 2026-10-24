@@ -37,7 +37,7 @@ import vent.global.mqtt.MqttClientManager;
  * MQTT 통합 테스트 공통 기반.
  *
  * <p>실제 Mosquitto와 PostgreSQL 컨테이너를 띄우고, 테스트용 게이트웨이 클라이언트로 측정값을 발행하는 도우미를 준다.
- * 측정값(#2, #3), 이상(#4), 게이트웨이 연결 상태(#6) 테스트가 함께 쓴다.
+ * 측정값(#2, #3), 이상(#4, #5), 게이트웨이 연결 상태(#6), 후드 연동(#7) 테스트가 함께 쓴다.
  *
  * <ul>
  *   <li>컨테이너는 JVM에서 한 번만 띄워 모든 테스트 클래스가 함께 쓴다(singleton container). 클래스마다 다시 띄우면
@@ -76,6 +76,8 @@ public abstract class MqttIntegrationTest {
         registry.add("vent.mqtt.client-id", () -> "vent-server-test-" + UUID.randomUUID());
         // 무수신 검사 스케줄러는 끈다. 테스트가 검사 시각을 직접 넣어 부른다(#6).
         registry.add("vent.gateway.connection.check-enabled", () -> "false");
+        // 후드 연동 판정 스케줄러도 끈다. 테스트가 판정 시각을 직접 넣어 부른다(#7).
+        registry.add("vent.hood.interlock.check-enabled", () -> "false");
     }
 
     protected static MqttClient gateway;
@@ -155,11 +157,23 @@ public abstract class MqttIntegrationTest {
      * 섞이면 안 되는 "N분 지속" 테스트가 쓴다(#5).
      */
     protected void registerTestVentilator(long siteId, String gatewayId, String deviceId) {
+        registerTestDevice(siteId, gatewayId, deviceId, "VENTILATOR", "DOMEKT R 300V");
+    }
+
+    /** 테스트 전용 장비를 시드 현장에 등록한다(이미 있으면 그대로). 후드 연동 테스트(#7)는 VEMC를 등록한다. */
+    protected void registerTestDevice(long siteId, String gatewayId, String deviceId, String type, String model) {
         jdbcTemplate.update("""
                 INSERT INTO device (id, site_id, gateway_id, type, model)
-                VALUES (?, ?, ?, 'VENTILATOR', 'DOMEKT R 300V')
+                VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT (id) DO NOTHING
-                """, deviceId, siteId, gatewayId);
+                """, deviceId, siteId, gatewayId, type, model);
+    }
+
+    /** 장비 이벤트 토픽에 보낸다(#7). */
+    protected static void publishEvent(String siteId, String deviceId, String json) throws Exception {
+        MqttMessage message = new MqttMessage(json.getBytes(StandardCharsets.UTF_8));
+        message.setQos(QOS_AT_LEAST_ONCE);
+        gateway.publish("jabjaje/" + siteId + "/" + deviceId + "/event", message);
     }
 
     /** 이 테스트가 넣은 측정값을 지운다. 미래 시각 측정값이 남으면 뒤 테스트의 "최신 측정값"이 바뀐다(#5). */

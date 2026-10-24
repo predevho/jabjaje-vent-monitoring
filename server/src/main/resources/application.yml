@@ -51,6 +51,14 @@ vent:
       lasting: 30m
     bypass-too-long:
       lasting: 60m
+  hood:
+    # 후드 연동 판정 (스펙 6.2, #7). HOOD_ON 직전 급기와 60초 뒤 첫 급기를 비교한다.
+    interlock:
+      response-wait: 60s
+      min-supply-rise-ratio: 0.1
+      max-reading-gap: 2m
+      give-up-after: 24h
+      check-interval: 30s
   gateway:
     # 게이트웨이 연결 상태 기준 (스펙 6.3, #6). 시연에서는 offline-after를 짧게 바꿔 쓴다.
     connection:

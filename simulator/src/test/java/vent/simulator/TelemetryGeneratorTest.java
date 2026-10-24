@@ -12,7 +12,8 @@ import org.junit.jupiter.api.Test;
  *
  * <p>테스트 지점: 생성기의 공개 메서드. 필터 막힘은 측정할 때마다 서서히 올라 180Pa에 닿고 그 근처에 머물며,
  * 필터 교체는 바로 60Pa로 돌아오는지 본다(#4). CO2 상승은 1,500ppm을 넘었다가 정상으로 돌아오고, 풍량 저하는
- * 목표 풍량의 80% 아래로, 바이패스는 측정값에 그대로 실리는지 본다(#5).
+ * 목표 풍량의 80% 아래로, 바이패스는 측정값에 그대로 실리는지 본다(#5). 후드 연동 중에는 급기가 서버 판정 기준(10%)보다
+ * 크게 오르고 배기는 내려가는지 본다(#7).
  *
  * @author predevho (AI 보조: Claude)
  * @since 2026-10-24 (#4)
@@ -92,5 +93,19 @@ class TelemetryGeneratorTest {
 
         generator.setBypass(false);
         assertThat(generator.next(NOW).bypass()).isFalse();
+    }
+
+    @Test
+    @DisplayName("후드 연동 중에는 급기가 10% 넘게 오르고 배기는 내려가며, 끄면 원래대로 돌아온다")
+    void hoodInterlockRaisesSupplyAndLowersExhaust() {
+        TelemetryMessage before = generator.next(NOW);
+
+        generator.setHoodInterlock(true);
+        TelemetryMessage during = generator.next(NOW);
+        assertThat(during.supplyCmh()).isGreaterThan((int) (before.supplyCmh() * 1.1));
+        assertThat(during.exhaustCmh()).isLessThan(before.exhaustCmh());
+
+        generator.setHoodInterlock(false);
+        assertThat(generator.next(NOW).supplyCmh()).isLessThan((int) (before.supplyCmh() * 1.1));
     }
 }

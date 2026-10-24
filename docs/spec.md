@@ -245,6 +245,8 @@ SERVICE_REQUEST 1──0..1 VERDICT
 | type | varchar | `HOOD_ON`, `HOOD_OFF` |
 | occurred_at | timestamptz | |
 | received_at | timestamptz | |
+| interlock_result | varchar | 후드 연동 확인 결과(HOOD_ON만). 비어 있으면 확인 전, `CONFIRMED` / `NO_RESPONSE` / `INCONCLUSIVE` (#7) |
+| judged_at | timestamptz | 확인한 시각 (#7) |
 
 **anomaly** (이상)
 | 컬럼 | 타입 | 설명 |
@@ -346,8 +348,12 @@ SERVICE_REQUEST 1──0..1 VERDICT
 - 측정값이 들어올 때마다 해당 장비의 규칙을 평가한다. 측정값 저장이 커밋된 뒤 별도 트랜잭션에서 평가해, 평가가 실패해도 측정값은 남는다(ADR-0013). 오프라인 규칙은 30초 주기 스케줄러로 평가한다.
 - **시간 판단은 모두 `measured_at` 기준**으로 한다.
 - **지금 상태를 나타내는 규칙은 최근 데이터로만 판단한다.** `CO2_HIGH`, `AIRFLOW_BELOW_TARGET`, `BYPASS_TOO_LONG`은 `late = true` 데이터를 쓰지 않는다. 몇 시간 전 데이터로 지금 이상이 뜨는 것을 막는다. `FILTER_CLOGGED`는 `measured_at` 기준 가장 최신 값만 본다.
-- **장비 고장 판정은 늦은 데이터도 쓴다.** `VEMC_NO_RESPONSE`는 시간이 지나도 의미가 남는 고장이라, 오프라인 동안의 HOOD_ON 이벤트와 측정값도 함께 평가한다. 끊긴 동안 연동이 정상이었는지 복구 후에 확인할 수 있다.
-- `VEMC_NO_RESPONSE` 판정: 30초 주기 스케줄러가 판정되지 않은 HOOD_ON 이벤트를 찾는다. 같은 현장 환기장치의 측정값 중 `occurred_at` + 60초 이후 값이 있으면, 직전 값보다 급기가 올랐는지 확인한다.
+- **장비 고장 확인은 늦은 데이터도 쓴다.** `VEMC_NO_RESPONSE`는 시간이 지나도 의미가 남는 고장이라, 오프라인 동안의 HOOD_ON 이벤트와 측정값도 함께 평가한다. 끊긴 동안 연동이 정상이었는지 복구 후에 확인할 수 있다.
+- `VEMC_NO_RESPONSE` 확인: 30초 주기 스케줄러가 확인되지 않은 HOOD_ON 이벤트를 찾는다. 같은 현장 환기장치의 측정값 중 `occurred_at` + 60초 이후 값이 있으면, 직전 값보다 급기가 올랐는지 확인한다.
+  - 직전 값은 HOOD_ON 시각과 같거나 그 전의 마지막 OK 측정값, 이후 값은 HOOD_ON + 60초와 같거나 그 뒤의 첫 OK 측정값이다. 늦은 측정값도 쓴다.
+  - 급기가 직전보다 10% 넘게 오르면 정상(`CONFIRMED`), 아니면 무반응(`NO_RESPONSE`). 측정값의 평소 흔들림보다 크게 둔다.
+  - 확인 보류(`INCONCLUSIVE`): 후드가 이미 켜져 있었음(HOOD_ON 연속), 60초 안에 HOOD_OFF, 이후 값을 HOOD_OFF 뒤에 잼, 직전 값이나 이후 값이 2분 넘게 떨어져 있음, 직전 값 없음, 24시간(게이트웨이 버퍼 크기) 동안 이후 값 없음(같은 현장에 환기장치가 없는 경우 포함). 이상을 만들지도 해결하지도 않는다.
+  - 결과는 `device_event.interlock_result`에 남기고, 이상은 그 기록과 같은 트랜잭션에서 열고 닫는다(ADR-0014와 같은 방식). 이상이 열린 뒤의 정상 연동만 해결로 본다. 한 현장에 환기장치가 여러 대면 ID가 가장 앞선 장비와 비교한다(알고 있는 한계, #7). 이벤트 시각의 시계 오차 검사는 아직 없다.
 - `quality != OK`인 데이터는 규칙 평가에서 제외한다.
 - 상태를 메모리에 두지 않고 DB를 조회한다. 서버가 재시작돼도 판단이 이어진다.
 - 해제 조건을 발생 조건보다 느슨하게 잡는다(히스테리시스). 기준값 근처에서 이상이 켜졌다 꺼졌다 반복하는 것을 막는다.
@@ -657,6 +663,7 @@ v1 설계를 통신 안정성, 보안, 제어 안전, 데이터 품질, AI, 운�
   - 게이트웨이를 장비에서 분리(`gateway` 테이블, `CONNECTED` / `INTERRUPTED` / `OFFLINE`), 끊긴 동안 장비는 `확인 불가`, `DEVICE_OFFLINE` → `GATEWAY_OFFLINE`
   - A/S 접수 → A/S 신청(`as_ticket` → `service_request`), 1차 진단 → AI 소견(`ai_assessment`), 진단 검토 → 판정(`verdict` 테이블 추가)
   - 숫자 기준 문장에서 "이상"(≥) 대신 "넘게", "도달" 사용
+- v11: #7 반영. 후드 연동 확인 기준(직전 값과 60초 뒤 첫 값, 10% 넘게 상승), 확인 보류 조건, `device_event.interlock_result`·`judged_at`(V8)
 - v10: #5 반영. "N분 지속" 판단(이어진 구간, 2분 넘게 비면 끊김), CO2 심각도 올리기, 목표 풍량 미달의 바이패스 제외(부스트는 #8), 최소 환기량 계산과 API 표시, 지속 시간 설정
 - v9: #4, #6 반영. 이상 테이블(V6, 부분 유니크 인덱스 2개)과 `FILTER_CLOGGED` 해제 130Pa(ADR-0013). 게이트웨이 연결 상태(V7: 수신 시각, 끊긴 시각, 버전, 지원 기능), 수신으로 보는 것과 retained 처리, `GATEWAY_OFFLINE`을 상태 변경과 같은 트랜잭션에서(ADR-0014)
 - v8: #3 반영. 품질(OK/OUT_OF_RANGE/CLOCK_SKEW)과 늦은 측정값 저장(V4), 온도·습도 컬럼 확장(V5), 수동 확인 응답과 재연결 재전송(ADR-0012, C15), 최신값은 OK만(C16), 시뮬레이터 버퍼와 백오프+jitter(C9, C11)

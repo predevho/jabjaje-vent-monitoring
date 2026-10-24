@@ -25,6 +25,10 @@ import java.util.stream.Collectors;
  * POST /sites/{현장ID}/airflow-normal  풍량 정상
  * POST /sites/{현장ID}/bypass-on       바이패스 켜짐 (#5)
  * POST /sites/{현장ID}/bypass-off      바이패스 꺼짐
+ * POST /sites/{현장ID}/hood-on         후드 켜짐 (VEMC 이벤트 + 현장 연동, #7)
+ * POST /sites/{현장ID}/hood-off        후드 꺼짐
+ * POST /sites/{현장ID}/vemc-fail       VEMC 고장 (이벤트는 가지만 급기가 오르지 않음, #7)
+ * POST /sites/{현장ID}/vemc-repair     VEMC 수리
  * POST /sites/{현장ID}/network-down    네트워크 끊김 (Last Will, #6)
  * POST /sites/{현장ID}/network-up      네트워크 복구 (#6)
  * GET  /health                         동작 확인
@@ -46,6 +50,10 @@ public final class ScenarioControlServer {
             Map.entry("airflow-normal", g -> g.changeTelemetry("풍량 정상", TelemetryGenerator::restoreAirflow)),
             Map.entry("bypass-on", g -> g.changeTelemetry("바이패스 켜짐", t -> t.setBypass(true))),
             Map.entry("bypass-off", g -> g.changeTelemetry("바이패스 꺼짐", t -> t.setBypass(false))),
+            Map.entry("hood-on", GatewaySimulator::hoodOn),
+            Map.entry("hood-off", GatewaySimulator::hoodOff),
+            Map.entry("vemc-fail", g -> g.setVemcBroken(true)),
+            Map.entry("vemc-repair", g -> g.setVemcBroken(false)),
             Map.entry("network-down", GatewaySimulator::networkDown),
             Map.entry("network-up", GatewaySimulator::networkUp));
 

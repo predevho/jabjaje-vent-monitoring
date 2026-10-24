@@ -38,6 +38,9 @@ import org.eclipse.paho.mqttv5.common.packet.MqttProperties;
  * <p>연결할 때 상태 토픽에 {@code online}과 버전·지원 기능을 retained로 보고하고, Last Will로 {@code offline}을 등록한다(#6).
  * 연결이 갑자기 끊기면 브로커가 이 offline을 대신 보낸다.
  *
+ * <p>현장의 VEMC도 흉내 낸다(#7). 후드가 켜지면 HOOD_ON 이벤트를 {@code jabjaje/{현장ID}/{VEMC ID}/event}로 보내고,
+ * 후드 연동(급기 올림, 배기 내림)은 브로커를 거치지 않고 여기서 바로 처리한다(ADR-0001). 이벤트도 끊긴 동안 버퍼에 쌓는다.
+ *
  * @author predevho (AI 보조: Claude)
  * @since 2026-10-23 (#2)
  */
@@ -49,6 +52,7 @@ public class GatewaySimulator {
     private static final int CONNECTION_TIMEOUT_SECONDS = 5;
     /** 30초 주기로 24시간 분량 */
     private static final int BUFFER_CAPACITY = 2_880;
+    private static final int EVENT_BUFFER_CAPACITY = 500;
     /** online 상태 메시지로 보고하는 버전과 지원 기능 (스펙 4.4, #6) */
     private static final String FIRMWARE_VERSION = "1.0.0";
     private static final List<String> CAPABILITIES = List.of("BOOST", "HOOD_EVENT");
@@ -60,10 +64,16 @@ public class GatewaySimulator {
     private final MqttClient client;
     private final TelemetryGenerator generator;
     private final TelemetryBuffer<TelemetryMessage> buffer = new TelemetryBuffer<>(BUFFER_CAPACITY);
+    /** 후드 이벤트 버퍼 (#7). 측정값보다 드물어 작게 둔다 */
+    private final TelemetryBuffer<DeviceEventMessage> eventBuffer = new TelemetryBuffer<>(EVENT_BUFFER_CAPACITY);
     private final ReconnectBackoff backoff = new ReconnectBackoff();
     private final ScheduledExecutorService worker;
     /** 네트워크 끊김 시나리오(#6)가 켜져 있으면 true. 켜져 있는 동안은 다시 연결하지 않는다. 게이트웨이 스레드에서만 쓴다. */
     private boolean networkDown;
+    /** VEMC 고장 시나리오(#7). 후드는 감지해 이벤트는 보내지만 환기장치로 신호가 가지 않는다(배선 불량). 게이트웨이 스레드에서만 쓴다 */
+    private boolean vemcBroken;
+    /** 후드가 켜져 있으면 true (#7). 이미 켜진 후드에 HOOD_ON을 다시 보내지 않고, VEMC를 고치면 연동을 다시 켠다 */
+    private boolean hoodOn;
 
     public GatewaySimulator(SiteConfig site, String brokerUri) {
         this.site = site;
@@ -165,34 +175,101 @@ public class GatewaySimulator {
         }
     }
 
+    /** 쌓인 이벤트와 측정값을 보낸다. */
+    private void flush() {
+        flush(eventBuffer, eventTopic(), "이벤트");
+        flush(buffer, topic(), "측정값");
+    }
+
     /**
-     * 쌓인 측정값을 오래된 것부터 하나씩 보낸다. 동기 발행이라 브로커가 받았다고 응답(PUBACK)한 뒤에야 버퍼에서 지운다.
+     * 버퍼에 쌓인 메시지를 오래된 것부터 하나씩 보낸다. 동기 발행이라 브로커가 받았다고 응답(PUBACK)한 뒤에야 버퍼에서 지운다.
      * 보내다 실패하면 남은 것은 버퍼에 그대로 두고 다음 기회에 보낸다.
      */
-    private void flush() {
+    private <T> void flush(TelemetryBuffer<T> pending, String topic, String label) {
         int sent = 0;
-        Optional<TelemetryMessage> next;
-        while (client.isConnected() && (next = buffer.peekOldest()).isPresent()) {
-            TelemetryMessage telemetry = next.get();
+        Optional<T> next;
+        while (client.isConnected() && (next = pending.peekOldest()).isPresent()) {
             try {
-                MqttMessage message = new MqttMessage(JSON.writeValueAsBytes(telemetry));
+                MqttMessage message = new MqttMessage(JSON.writeValueAsBytes(next.get()));
                 message.setQos(QOS_AT_LEAST_ONCE);
-                client.publish(topic(), message);
-                buffer.removeOldest();
+                client.publish(topic, message);
+                pending.removeOldest();
                 sent++;
             } catch (JsonProcessingException e) {
                 // 직렬화가 안 되는 값은 다시 해도 안 되므로 버린다.
-                Log.error("[%s] 측정값 직렬화 실패, 버림: %s", site.gatewayId(), e.getMessage());
-                buffer.removeOldest();
+                Log.error("[%s] %s 직렬화 실패, 버림: %s", site.gatewayId(), label, e.getMessage());
+                pending.removeOldest();
             } catch (MqttException e) {
-                Log.error("[%s] 측정값 발행 실패, 버퍼에 남김 (%d개): %s", site.gatewayId(), buffer.size(), e.getMessage());
+                Log.error("[%s] %s 발행 실패, 버퍼에 남김 (%d개): %s", site.gatewayId(), label, pending.size(), e.getMessage());
                 return;
             }
         }
         if (sent > 1) {
-            Log.info("[%s] 쌓여 있던 측정값 %d개 발행", site.gatewayId(), sent);
+            Log.info("[%s] 쌓여 있던 %s %d개 발행", site.gatewayId(), label, sent);
         } else if (sent == 1) {
-            Log.info("[%s] 측정값 발행", site.gatewayId());
+            Log.info("[%s] %s 발행", site.gatewayId(), label);
+        }
+    }
+
+    /**
+     * 후드 켜짐 시나리오: VEMC가 HOOD_ON을 보내고, 고장이 아니면 환기장치 급기를 올린다(현장 연동, ADR-0001).
+     *
+     * @since 2026-10-24 (#7)
+     */
+    public void hoodOn() {
+        worker.execute(() -> {
+            if (hoodOn) {
+                Log.info("[%s] 시나리오: 후드가 이미 켜져 있음", site.gatewayId());
+                return;
+            }
+            hoodOn = true;
+            sendEvent("HOOD_ON");
+            generator.setHoodInterlock(!vemcBroken);
+            Log.info("[%s] 시나리오: 후드 켜짐 (%s)", site.gatewayId(), vemcBroken ? "VEMC 고장, 연동 안 됨" : "급기 올림");
+        });
+    }
+
+    /**
+     * 후드 꺼짐 시나리오: VEMC가 HOOD_OFF를 보내고 환기장치는 평소대로 돌아간다.
+     *
+     * @since 2026-10-24 (#7)
+     */
+    public void hoodOff() {
+        worker.execute(() -> {
+            if (!hoodOn) {
+                Log.info("[%s] 시나리오: 후드가 이미 꺼져 있음", site.gatewayId());
+                return;
+            }
+            hoodOn = false;
+            sendEvent("HOOD_OFF");
+            generator.setHoodInterlock(false);
+            Log.info("[%s] 시나리오: 후드 꺼짐", site.gatewayId());
+        });
+    }
+
+    /**
+     * VEMC 고장·수리 시나리오. 고장이면 후드 이벤트는 보내지만 환기장치로 신호가 가지 않는다.
+     *
+     * @since 2026-10-24 (#7)
+     */
+    public void setVemcBroken(boolean broken) {
+        worker.execute(() -> {
+            vemcBroken = broken;
+            // 고장이면 연동이 멈추고, 고치면 켜져 있는 후드에 맞춰 연동이 다시 일어난다.
+            generator.setHoodInterlock(hoodOn && !broken);
+            Log.info("[%s] 시나리오: VEMC %s", site.gatewayId(), broken ? "고장" : "수리");
+        });
+    }
+
+    /** 이벤트를 버퍼에 넣고, 연결되어 있으면 바로 보낸다. 게이트웨이 스레드에서 부른다. */
+    private void sendEvent(String type) {
+        if (eventBuffer.add(DeviceEventMessage.of(site.vemcId(), type, OffsetDateTime.now(SEOUL)))) {
+            Log.error("[%s] 이벤트 버퍼가 가득 차 가장 오래된 이벤트를 버림", site.gatewayId());
+        }
+        if (client.isConnected()) {
+            flush(eventBuffer, eventTopic(), "이벤트");
+        } else {
+            Log.info("[%s] 연결 끊김, 이벤트를 버퍼에 쌓음 (%d개)", site.gatewayId(), eventBuffer.size());
         }
     }
 
@@ -274,6 +351,10 @@ public class GatewaySimulator {
         } catch (MqttException e) {
             Log.error("[%s] 연결 정리 실패: %s", site.gatewayId(), e.getMessage());
         }
+    }
+
+    private String eventTopic() {
+        return "jabjaje/" + site.siteId() + "/" + site.vemcId() + "/event";
     }
 
     private String statusTopic() {

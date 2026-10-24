@@ -19,9 +19,9 @@ import java.util.List;
 public final class SimulatorApplication {
 
     private static final List<SiteConfig> SITES = List.of(
-            new SiteConfig("1", "gw-s1", "vent-s1", 210),
-            new SiteConfig("2", "gw-s2", "vent-s2", 149),
-            new SiteConfig("3", "gw-s3", "vent-s3", 248));
+            new SiteConfig("1", "gw-s1", "vent-s1", "vemc-s1", 210),
+            new SiteConfig("2", "gw-s2", "vent-s2", "vemc-s2", 149),
+            new SiteConfig("3", "gw-s3", "vent-s3", "vemc-s3", 248));
 
     private SimulatorApplication() {
     }

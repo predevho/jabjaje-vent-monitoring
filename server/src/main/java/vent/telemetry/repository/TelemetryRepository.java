@@ -2,6 +2,7 @@ package vent.telemetry.repository;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -40,4 +41,20 @@ public interface TelemetryRepository extends JpaRepository<Telemetry, Long>, Tel
      */
     List<Telemetry> findByDeviceIdAndQualityAndMeasuredAtAfterOrderByMeasuredAtDesc(
             String deviceId, TelemetryQuality quality, OffsetDateTime since);
+
+    /**
+     * 그 시각과 같거나 그 전의 마지막 측정값. 후드 연동 판정의 "직전 값"이다.
+     *
+     * @since 2026-10-24 (#7)
+     */
+    Optional<Telemetry> findFirstByDeviceIdAndQualityAndMeasuredAtLessThanEqualOrderByMeasuredAtDesc(
+            String deviceId, TelemetryQuality quality, OffsetDateTime at);
+
+    /**
+     * 그 시각과 같거나 그 뒤의 첫 측정값. 후드 연동 판정의 "60초 뒤 값"이다.
+     *
+     * @since 2026-10-24 (#7)
+     */
+    Optional<Telemetry> findFirstByDeviceIdAndQualityAndMeasuredAtGreaterThanEqualOrderByMeasuredAtAsc(
+            String deviceId, TelemetryQuality quality, OffsetDateTime at);
 }

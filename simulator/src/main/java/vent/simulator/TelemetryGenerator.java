@@ -44,6 +44,9 @@ public class TelemetryGenerator {
     /** 풍량 저하 시나리오에서 급기가 목표 풍량의 몇 배가 되는지 (#5). 80% 기준보다 낮다 */
     private static final double LOW_AIRFLOW_RATIO = 0.6;
     private static final double NORMAL_AIRFLOW_RATIO = 0.98;
+    /** 후드 연동 중 급기·배기 배율 (#7). VEMC가 급기를 올리고 배기를 내려 실내 압력을 맞춘다(용어집: 후드 연동) */
+    private static final double HOOD_SUPPLY_FACTOR = 1.4;
+    private static final double HOOD_EXHAUST_FACTOR = 0.8;
 
     private double co2Ppm;
     private double tempC;
@@ -59,6 +62,8 @@ public class TelemetryGenerator {
     private boolean airflowLow;
     /** 바이패스가 켜져 있으면 true (#5) */
     private boolean bypass;
+    /** VEMC가 후드 연동 신호를 보내고 있으면 true (#7) */
+    private boolean hoodInterlock;
 
     public TelemetryGenerator(String ventilatorId, int targetAirflowCmh, long seed) {
         this.ventilatorId = ventilatorId;
@@ -81,8 +86,9 @@ public class TelemetryGenerator {
         filterPa = filterClogging ? Math.min(CLOGGED_FILTER_PA, filterPa + CLOG_STEP_PA) : filterPa + 0.02;
 
         double airflowRatio = airflowLow ? LOW_AIRFLOW_RATIO : NORMAL_AIRFLOW_RATIO;
-        int supplyCmh = (int) Math.round(targetAirflowCmh * airflowRatio + drift(2));
-        int exhaustCmh = (int) Math.round(supplyCmh * 0.97);
+        int baseSupplyCmh = (int) Math.round(targetAirflowCmh * airflowRatio + drift(2));
+        int supplyCmh = hoodInterlock ? (int) Math.round(baseSupplyCmh * HOOD_SUPPLY_FACTOR) : baseSupplyCmh;
+        int exhaustCmh = (int) Math.round(baseSupplyCmh * 0.97 * (hoodInterlock ? HOOD_EXHAUST_FACTOR : 1));
 
         return new TelemetryMessage(
                 TelemetryMessage.SCHEMA_VERSION,
@@ -174,6 +180,16 @@ public class TelemetryGenerator {
      */
     public void setBypass(boolean on) {
         bypass = on;
+    }
+
+    /**
+     * 후드 연동 신호를 켜거나 끈다. 켜져 있는 동안 급기는 약 40% 오르고 배기는 약 20% 내린다.
+     * 서버를 거치지 않고 VEMC와 환기장치 사이에서 바로 일어난다(ADR-0001).
+     *
+     * @since 2026-10-24 (#7)
+     */
+    public void setHoodInterlock(boolean on) {
+        hoodInterlock = on;
     }
 
     private double drift(double maxStep) {
