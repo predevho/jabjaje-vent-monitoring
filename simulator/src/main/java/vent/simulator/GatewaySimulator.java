@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -75,8 +76,19 @@ public class GatewaySimulator {
     /** 후드가 켜져 있으면 true (#7). 이미 켜진 후드에 HOOD_ON을 다시 보내지 않고, VEMC를 고치면 연동을 다시 켠다 */
     private boolean hoodOn;
 
-    public GatewaySimulator(SiteConfig site, String brokerUri) {
+    /** 게이트웨이 계정 비밀번호 (#13). 계정 이름은 게이트웨이 ID다 */
+    private final String password;
+
+    /**
+     * 현장 하나의 게이트웨이를 만든다. 연결은 {@link #start(Duration)}에서 시작한다.
+     *
+     * @param site      흉내 낼 현장
+     * @param brokerUri 브로커 주소
+     * @param password  게이트웨이 계정 비밀번호 (#13). 계정 이름은 게이트웨이 ID이고, 브로커는 이 이름을 클라이언트 ID로 쓴다
+     */
+    public GatewaySimulator(SiteConfig site, String brokerUri, String password) {
         this.site = site;
+        this.password = password;
         this.generator = new TelemetryGenerator(site.ventilatorId(), site.targetAirflowCmh(), site.siteId().hashCode());
         this.worker = Executors.newSingleThreadScheduledExecutor(r -> new Thread(r, site.gatewayId()));
         try {
@@ -121,6 +133,9 @@ public class GatewaySimulator {
         options.setAutomaticReconnect(false);
         options.setKeepAliveInterval(KEEP_ALIVE_SECONDS);
         options.setConnectionTimeout(CONNECTION_TIMEOUT_SECONDS);
+        // 게이트웨이별 계정. 브로커 ACL이 이 계정에 자기 현장 토픽만 허용한다 (#13).
+        options.setUserName(site.gatewayId());
+        options.setPassword(password.getBytes(StandardCharsets.UTF_8));
         // 연결이 갑자기 끊기면 브로커가 대신 보내는 offline (Last Will, retained)
         MqttMessage will = new MqttMessage(offlineStatusJson());
         will.setQos(QOS_AT_LEAST_ONCE);

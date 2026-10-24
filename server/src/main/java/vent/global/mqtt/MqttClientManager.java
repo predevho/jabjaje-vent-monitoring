@@ -1,5 +1,6 @@
 package vent.global.mqtt;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.Executors;
@@ -136,6 +137,11 @@ public class MqttClientManager implements SmartLifecycle, MqttCallback {
         // Paho 기본값은 재연결 간격이 최대 2분까지 늘어나 브로커 복구 뒤에도 수신이 늦게 재개된다.
         options.setAutomaticReconnectDelay(1, (int) MAX_RECONNECT_DELAY.toSeconds());
         options.setKeepAliveInterval(KEEP_ALIVE_SECONDS);
+        if (properties.hasCredentials()) {
+            // 익명 접속은 브로커가 거부한다 (#13, 스펙 9.2 S1).
+            options.setUserName(properties.username());
+            options.setPassword(properties.password().getBytes(StandardCharsets.UTF_8));
+        }
         return options;
     }
 

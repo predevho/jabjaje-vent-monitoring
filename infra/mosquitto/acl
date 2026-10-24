@@ -1,0 +1,40 @@
+# 브로커 계정별 토픽 권한 (스펙 4.1, 9.2 S1, #13).
+# @author predevho (AI 보조: Claude)
+# @since 2026-10-24 (#13)
+#
+# 최소 권한: 게이트웨이는 자기 현장의 보고 토픽에만 쓰고, 자기 현장의 원격 명령만 받는다.
+# 상태(status, Last Will 포함)는 자기 게이트웨이 ID로만 쓴다.
+# 원격 명령(command)은 서버만 보낸다. 게이트웨이가 자기 장비에 원격 명령을 보내는 척하는 것도 막는다.
+# 여기 적지 않은 토픽은 모두 거부된다. 현장이 많아지면 dynamic security 플러그인이나 DB 기반 인증으로 바꾼다.
+
+# 서버: 모든 현장의 보고를 받고, 원격 명령을 보낸다.
+user vent-server
+topic read jabjaje/+/+/telemetry
+topic read jabjaje/+/+/event
+topic read jabjaje/+/+/status
+topic read jabjaje/+/+/command/ack
+topic write jabjaje/+/+/command
+
+# 양평 현장 게이트웨이
+user gw-s1
+topic write jabjaje/1/+/telemetry
+topic write jabjaje/1/+/event
+topic write jabjaje/1/gw-s1/status
+topic write jabjaje/1/+/command/ack
+topic read jabjaje/1/+/command
+
+# 안성 현장 게이트웨이
+user gw-s2
+topic write jabjaje/2/+/telemetry
+topic write jabjaje/2/+/event
+topic write jabjaje/2/gw-s2/status
+topic write jabjaje/2/+/command/ack
+topic read jabjaje/2/+/command
+
+# 서대문 현장 게이트웨이
+user gw-s3
+topic write jabjaje/3/+/telemetry
+topic write jabjaje/3/+/event
+topic write jabjaje/3/gw-s3/status
+topic write jabjaje/3/+/command/ack
+topic read jabjaje/3/+/command

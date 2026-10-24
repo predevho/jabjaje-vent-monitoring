@@ -11,7 +11,8 @@ import java.util.List;
  * 현장 목록은 서버의 시연용 시드 데이터(db/seed/R__demo_seed.sql)와 같다.
  *
  * <p>환경변수: {@code MQTT_URI}(기본 {@code tcp://localhost:1883}), {@code INTERVAL_SECONDS}(기본 30),
- * {@code CONTROL_PORT}(시나리오 제어 API, 기본 8090).
+ * {@code CONTROL_PORT}(시나리오 제어 API, 기본 8090), {@code MQTT_PASSWORD_GW_S1}처럼 게이트웨이별 브로커 비밀번호
+ * (기본은 시연용 {@code 게이트웨이ID-demo}, #13).
  *
  * @author predevho (AI 보조: Claude)
  * @since 2026-10-23 (#2)
@@ -33,7 +34,7 @@ public final class SimulatorApplication {
 
         // 게이트웨이마다 자기 스레드에서 연결, 측정, 발행을 순서대로 처리한다.
         List<GatewaySimulator> gateways = SITES.stream()
-                .map(site -> new GatewaySimulator(site, brokerUri))
+                .map(site -> new GatewaySimulator(site, brokerUri, passwordOf(site)))
                 .toList();
         gateways.forEach(gateway -> gateway.start(interval));
         Log.info("시뮬레이터 시작: 현장 %d곳, 브로커 %s, 주기 %d초", SITES.size(), brokerUri, interval.toSeconds());
@@ -45,6 +46,12 @@ public final class SimulatorApplication {
             controlServer.stop();
             gateways.forEach(GatewaySimulator::close);
         }));
+    }
+
+    /** 게이트웨이 계정 비밀번호. 예: gw-s1 → 환경변수 MQTT_PASSWORD_GW_S1, 없으면 시연용 gw-s1-demo (#13). */
+    private static String passwordOf(SiteConfig site) {
+        String name = "MQTT_PASSWORD_" + site.gatewayId().toUpperCase().replace('-', '_');
+        return env(name, site.gatewayId() + "-demo");
     }
 
     private static String env(String name, String defaultValue) {
