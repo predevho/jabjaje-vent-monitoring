@@ -13,7 +13,7 @@ import vent.anomaly.rule.AnomalyRuleOutcome.Kind;
  * 목표 풍량 미달 규칙 단위 테스트.
  *
  * <p>테스트 지점: 규칙의 공개 메서드. 기준은 스펙 6.1(급기가 목표 풍량의 80% 미만으로 30분 → WARN, 80%에 다시 도달 → 해제,
- * 바이패스 중 제외)이다. 목표 풍량 200CMH라 80%는 160CMH이고, 30초 간격 61개가 30분이다.
+ * 바이패스·부스트 중 제외)이다. 목표 풍량 200CMH라 80%는 160CMH이고, 30초 간격 61개가 30분이다.
  *
  * @author predevho (AI 보조: Claude)
  * @since 2026-10-24 (#5)
@@ -66,6 +66,16 @@ class AirflowBelowTargetRuleTest {
     void bypassInMiddleRestartsCount() {
         assertThat(evaluate(TelemetrySeries.start()
                 .then(40, supply(150)).then(1, supply(150).withBypass()).then(40, supply(150))).kind())
+                .isEqualTo(Kind.UNCHANGED);
+    }
+
+    @Test
+    @DisplayName("부스트 중인 측정값으로도 판단하지 않는다: 최신 값이 부스트면 그대로, 중간에 끼면 다시 센다 (#8)")
+    void boostIsExcludedLikeBypass() {
+        assertThat(evaluate(TelemetrySeries.start().then(61, supply(150)).then(1, supply(150).withBoost())).kind())
+                .isEqualTo(Kind.UNCHANGED);
+        assertThat(evaluate(TelemetrySeries.start()
+                .then(40, supply(150)).then(1, supply(150).withBoost()).then(40, supply(150))).kind())
                 .isEqualTo(Kind.UNCHANGED);
     }
 

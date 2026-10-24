@@ -86,6 +86,6 @@ class FilterCloggedRuleTest {
 
     private static AnomalyRuleInput readings(String model, int filterPa) {
         return new AnomalyRuleInput("vent-s1", model, 200,
-                List.of(new AnomalyRuleTelemetry(MEASURED_AT, 800, 200, filterPa, false, false)));
+                List.of(new AnomalyRuleTelemetry(MEASURED_AT, 800, 200, filterPa, false, false, false)));
     }
 }

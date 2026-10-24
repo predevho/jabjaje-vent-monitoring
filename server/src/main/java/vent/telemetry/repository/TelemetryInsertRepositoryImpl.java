@@ -23,10 +23,10 @@ class TelemetryInsertRepositoryImpl implements TelemetryInsertRepository {
     public int insertIgnoringDuplicate(TelemetryInsertParams telemetry) {
         return jdbcClient.sql("""
                         INSERT INTO telemetry (device_id, message_id, measured_at, received_at,
-                                               co2_ppm, temp_c, humidity_pct, supply_cmh, exhaust_cmh, filter_pa, bypass,
+                                               co2_ppm, temp_c, humidity_pct, supply_cmh, exhaust_cmh, filter_pa, bypass, boost,
                                                quality, late)
                         VALUES (:deviceId, :messageId, :measuredAt, :receivedAt,
-                                :co2Ppm, :tempC, :humidityPct, :supplyCmh, :exhaustCmh, :filterPa, :bypass,
+                                :co2Ppm, :tempC, :humidityPct, :supplyCmh, :exhaustCmh, :filterPa, :bypass, :boost,
                                 :quality, :late)
                         ON CONFLICT (message_id) DO NOTHING
                         """)

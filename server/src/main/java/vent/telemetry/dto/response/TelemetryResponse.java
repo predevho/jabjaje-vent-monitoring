@@ -26,6 +26,7 @@ public record TelemetryResponse(
         int exhaustCmh,
         int filterPa,
         boolean bypass,
+        boolean boost,
         TelemetryQuality quality,
         boolean late) {
 
@@ -42,6 +43,7 @@ public record TelemetryResponse(
                 telemetry.getExhaustCmh(),
                 telemetry.getFilterPa(),
                 telemetry.isBypass(),
+                telemetry.isBoost(),
                 telemetry.getQuality(),
                 telemetry.isLate());
     }

@@ -91,6 +91,7 @@ public class TelemetryIngestService {
                 message.exhaustCmh(),
                 message.filterPa(),
                 message.bypass(),
+                message.isBoosting(),
                 classification.quality().name(),
                 classification.late());
     }

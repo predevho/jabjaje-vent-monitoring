@@ -50,6 +50,9 @@ public class Telemetry {
 
     private boolean bypass;
 
+    /** 부스트 중인지 (#8) */
+    private boolean boost;
+
     @Enumerated(EnumType.STRING)
     private TelemetryQuality quality;
 
@@ -112,5 +115,9 @@ public class Telemetry {
 
     public boolean isBypass() {
         return bypass;
+    }
+
+    public boolean isBoost() {
+        return boost;
     }
 }

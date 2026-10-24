@@ -13,3 +13,19 @@ export async function getJson<T>(path: string): Promise<T> {
   }
   return (await response.json()) as T
 }
+
+/**
+ * JSON 본문으로 POST한다(#8). 서버가 안내 문구({message})와 함께 거절하면 그 문구를 오류 메시지로 쓴다.
+ */
+export async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    const error = (await response.json().catch(() => null)) as { message?: string } | null
+    throw new Error(error?.message ?? `${path} 요청 실패 (${response.status})`)
+  }
+  return (await response.json()) as T
+}

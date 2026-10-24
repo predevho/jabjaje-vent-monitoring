@@ -2,7 +2,9 @@ package vent.simulator;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.Optional;
 import java.util.Random;
 import java.util.UUID;
 
@@ -64,6 +66,12 @@ public class TelemetryGenerator {
     private boolean bypass;
     /** VEMC가 후드 연동 신호를 보내고 있으면 true (#7) */
     private boolean hoodInterlock;
+    /** 동결 방지 중이면 true (#8). 장비 자기 보호 로직이라 원격 명령보다 먼저다 (스펙 7.3) */
+    private boolean frostProtection;
+    /** 부스트가 끝나는 시각 (#8). 부스트 중이 아니면 null */
+    private OffsetDateTime boostUntil;
+    private int boostSupplyCmh;
+    private int boostExhaustCmh;
 
     public TelemetryGenerator(String ventilatorId, int targetAirflowCmh, long seed) {
         this.ventilatorId = ventilatorId;
@@ -89,6 +97,15 @@ public class TelemetryGenerator {
         int baseSupplyCmh = (int) Math.round(targetAirflowCmh * airflowRatio + drift(2));
         int supplyCmh = hoodInterlock ? (int) Math.round(baseSupplyCmh * HOOD_SUPPLY_FACTOR) : baseSupplyCmh;
         int exhaustCmh = (int) Math.round(baseSupplyCmh * 0.97 * (hoodInterlock ? HOOD_EXHAUST_FACTOR : 1));
+        // 부스트는 지속시간이 지나면 스스로 끝난다. 후드 연동이 켜지면 후드 연동이 먼저다 (스펙 7.3).
+        if (boostUntil != null && !measuredAt.isBefore(boostUntil)) {
+            boostUntil = null;
+        }
+        boolean boosting = boostUntil != null && !hoodInterlock;
+        if (boosting) {
+            supplyCmh = boostSupplyCmh + (int) Math.round(drift(2));
+            exhaustCmh = boostExhaustCmh + (int) Math.round(drift(2));
+        }
 
         return new TelemetryMessage(
                 TelemetryMessage.SCHEMA_VERSION,
@@ -101,7 +118,8 @@ public class TelemetryGenerator {
                 supplyCmh,
                 exhaustCmh,
                 (int) Math.round(filterPa),
-                bypass);
+                bypass,
+                boosting);
     }
 
     /**
@@ -190,6 +208,42 @@ public class TelemetryGenerator {
      */
     public void setHoodInterlock(boolean on) {
         hoodInterlock = on;
+    }
+
+    /**
+     * 부스트를 거절해야 하는 이유. 장비 우선순위(스펙 7.3)대로 자기 보호 로직, 후드 연동 순서로 본다. 적용할 수 있으면 빈 값.
+     *
+     * @since 2026-10-24 (#8)
+     */
+    public Optional<String> boostRejectionReason() {
+        if (frostProtection) {
+            return Optional.of("FROST_PROTECTION");
+        }
+        if (hoodInterlock) {
+            return Optional.of("HOOD_INTERLOCK");
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * 부스트를 시작한다. 지속시간이 지나면 다음 측정부터 스스로 원래대로 돌아간다(자동 복귀, 스펙 4.3).
+     * 해제 명령이 유실돼도 계속 켜져 있지 않다.
+     *
+     * @since 2026-10-24 (#8)
+     */
+    public void startBoost(int supplyCmh, int exhaustCmh, Duration duration, OffsetDateTime now) {
+        boostSupplyCmh = supplyCmh;
+        boostExhaustCmh = exhaustCmh;
+        boostUntil = now.plus(duration);
+    }
+
+    /**
+     * 동결 방지 시나리오 켜기/끄기 (#8). 켜져 있으면 부스트를 거절한다.
+     *
+     * @since 2026-10-24 (#8)
+     */
+    public void setFrostProtection(boolean on) {
+        frostProtection = on;
     }
 
     private double drift(double maxStep) {

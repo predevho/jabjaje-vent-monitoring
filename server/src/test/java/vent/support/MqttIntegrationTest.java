@@ -160,7 +160,21 @@ public abstract class MqttIntegrationTest {
         registerTestDevice(siteId, gatewayId, deviceId, "VENTILATOR", "DOMEKT R 300V");
     }
 
-    /** 테스트 전용 장비를 시드 현장에 등록한다(이미 있으면 그대로). 후드 연동 테스트(#7)는 VEMC를 등록한다. */
+    /**
+     * 테스트 전용 현장과 그 게이트웨이(연결 전)를 등록한다(이미 있으면 그대로). 다른 테스트의 측정값·이벤트·연결 상태와
+     * 섞이면 안 되는 테스트(#7, #8)가 쓴다. 시드 현장(1~3)과 겹치지 않는 번호를 쓴다.
+     */
+    protected void registerTestSite(long siteId, String gatewayId) {
+        jdbcTemplate.update("""
+                INSERT INTO site (id, name, region, floor_area_m2, occupants, target_airflow_cmh, target_airflow_source)
+                VALUES (?, ?, '테스트', 100.0, 3, 150, 'MINIMUM_AIRFLOW')
+                ON CONFLICT (id) DO NOTHING
+                """, siteId, "테스트 현장 " + siteId);
+        jdbcTemplate.update("INSERT INTO gateway (id, site_id, connection_state) VALUES (?, ?, 'PENDING') "
+                + "ON CONFLICT (id) DO NOTHING", gatewayId, siteId);
+    }
+
+    /** 테스트 전용 장비를 현장에 등록한다(이미 있으면 그대로). 후드 연동 테스트(#7)는 VEMC를 등록한다. */
     protected void registerTestDevice(long siteId, String gatewayId, String deviceId, String type, String model) {
         jdbcTemplate.update("""
                 INSERT INTO device (id, site_id, gateway_id, type, model)

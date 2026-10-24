@@ -57,22 +57,22 @@ final class TelemetrySeries {
         for (int i = oldestFirst.size() - 1; i >= 0; i--) {
             Entry entry = oldestFirst.get(i);
             Reading r = entry.reading();
-            newestFirst.add(new AnomalyRuleTelemetry(at, r.co2Ppm(), r.supplyCmh(), 85, r.bypass(), r.late()));
+            newestFirst.add(new AnomalyRuleTelemetry(at, r.co2Ppm(), r.supplyCmh(), 85, r.bypass(), r.boost(), r.late()));
             at = at.minusSeconds(entry.secondsAfterPrevious());
         }
         return newestFirst;
     }
 
     static Reading co2(int ppm) {
-        return new Reading(ppm, 200, false, false);
+        return new Reading(ppm, 200, false, false, false);
     }
 
     static Reading supply(int cmh) {
-        return new Reading(800, cmh, false, false);
+        return new Reading(800, cmh, false, false, false);
     }
 
     static Reading bypass(boolean on) {
-        return new Reading(800, 200, on, false);
+        return new Reading(800, 200, on, false, false);
     }
 
     /**
@@ -81,16 +81,21 @@ final class TelemetrySeries {
      * @author predevho (AI 보조: Claude)
      * @since 2026-10-24 (#5)
      */
-    record Reading(int co2Ppm, int supplyCmh, boolean bypass, boolean late) {
+    record Reading(int co2Ppm, int supplyCmh, boolean bypass, boolean boost, boolean late) {
 
         /** 같은 값의 늦은 측정값 */
         Reading asLate() {
-            return new Reading(co2Ppm, supplyCmh, bypass, true);
+            return new Reading(co2Ppm, supplyCmh, bypass, boost, true);
+        }
+
+        /** 같은 값에 부스트만 켠 측정값 (#8) */
+        Reading withBoost() {
+            return new Reading(co2Ppm, supplyCmh, bypass, true, late);
         }
 
         /** 같은 값에 바이패스만 켠 측정값 */
         Reading withBypass() {
-            return new Reading(co2Ppm, supplyCmh, true, late);
+            return new Reading(co2Ppm, supplyCmh, true, boost, late);
         }
     }
 }

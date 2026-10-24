@@ -98,7 +98,7 @@ public class AnomalyEvaluationService {
 
     private static AnomalyRuleTelemetry toRuleTelemetry(Telemetry telemetry) {
         return new AnomalyRuleTelemetry(telemetry.getMeasuredAt(), telemetry.getCo2Ppm(), telemetry.getSupplyCmh(),
-                telemetry.getFilterPa(), telemetry.isBypass(), telemetry.isLate());
+                telemetry.getFilterPa(), telemetry.isBypass(), telemetry.isBoost(), telemetry.isLate());
     }
 
     private void apply(String deviceId, DeviceAnomalyRule rule, AnomalyRuleOutcome outcome) {

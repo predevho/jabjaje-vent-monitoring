@@ -1,6 +1,7 @@
 package vent.simulator;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -42,6 +43,8 @@ import org.eclipse.paho.mqttv5.common.packet.MqttProperties;
  * <p>현장의 VEMC도 흉내 낸다(#7). 후드가 켜지면 HOOD_ON 이벤트를 {@code jabjaje/{현장ID}/{VEMC ID}/event}로 보내고,
  * 후드 연동(급기 올림, 배기 내림)은 브로커를 거치지 않고 여기서 바로 처리한다(ADR-0001). 이벤트도 끊긴 동안 버퍼에 쌓는다.
  *
+ * <p>환기장치의 원격 명령 토픽을 구독해 부스트를 적용하거나 거절하고 응답한다(#8).
+ *
  * @author predevho (AI 보조: Claude)
  * @since 2026-10-23 (#2)
  */
@@ -54,6 +57,8 @@ public class GatewaySimulator {
     /** 30초 주기로 24시간 분량 */
     private static final int BUFFER_CAPACITY = 2_880;
     private static final int EVENT_BUFFER_CAPACITY = 500;
+    /** 동기 발행·구독이 브로커 응답을 기다리는 최대 시간 (#8) */
+    private static final long PUBLISH_TIMEOUT_MILLIS = 5_000;
     /** online 상태 메시지로 보고하는 버전과 지원 기능 (스펙 4.4, #6) */
     private static final String FIRMWARE_VERSION = "1.0.0";
     private static final List<String> CAPABILITIES = List.of("BOOST", "HOOD_EVENT");
@@ -97,6 +102,8 @@ public class GatewaySimulator {
             throw new IllegalStateException("잘못된 브로커 주소: " + brokerUri, e);
         }
         this.client.setCallback(new GatewayCallback());
+        // 동기 발행이 브로커 응답을 끝없이 기다리면 게이트웨이 스레드(측정·재접속)가 멈춘다 (#8).
+        this.client.setTimeToWait(PUBLISH_TIMEOUT_MILLIS);
     }
 
     /** 연결을 시작하고, 주기마다 측정값을 만들도록 예약한다. */
@@ -114,6 +121,8 @@ public class GatewaySimulator {
             client.connect(connectionOptions());
             // online을 못 보내면 브로커에는 예전 Last Will(offline)이 retained로 남는다. 연결을 끊고 처음부터 다시 시도한다.
             publishStatus(onlineStatusJson());
+            // 원격 명령을 받는다 (#8). clean start라 연결할 때마다 다시 구독한다.
+            client.subscribe(commandTopic(), QOS_AT_LEAST_ONCE);
             backoff.reset();
             Log.info("[%s] 브로커 연결됨, 쌓인 측정값 %d개", site.gatewayId(), buffer.size());
             flush();
@@ -276,6 +285,59 @@ public class GatewaySimulator {
         });
     }
 
+    /**
+     * 원격 명령 하나를 처리한다(#8). 장비 우선순위(스펙 7.3)대로 자기 보호 로직(동결 방지), 후드 연동 중이면 거절하고,
+     * 아니면 부스트를 적용한다. 결과를 command/ack로 응답한다. 게이트웨이 스레드에서 부른다.
+     * 만료·중복·몰림 처리는 #9에서 한다.
+     */
+    private void handleCommand(byte[] payload) {
+        JsonNode command;
+        try {
+            command = JSON.readTree(payload);
+        } catch (java.io.IOException e) {
+            Log.error("[%s] 원격 명령을 해석할 수 없음, 버림: %s", site.gatewayId(), e.getMessage());
+            return;
+        }
+        String commandId = command.path("commandId").asText();
+        if (!"BOOST".equals(command.path("type").asText())) {
+            sendAck(commandId, "REJECTED", "UNSUPPORTED");
+            return;
+        }
+        Optional<String> rejection = generator.boostRejectionReason();
+        if (rejection.isPresent()) {
+            Log.info("[%s] 원격 명령 거절: 부스트 (%s)", site.gatewayId(), rejection.get());
+            sendAck(commandId, "REJECTED", rejection.get());
+            return;
+        }
+        JsonNode params = command.path("params");
+        int durationSec = params.path("durationSec").asInt();
+        generator.startBoost(params.path("supplyCmh").asInt(), params.path("exhaustCmh").asInt(),
+                Duration.ofSeconds(durationSec), OffsetDateTime.now(SEOUL));
+        Log.info("[%s] 원격 명령 적용: 부스트 급기 %d / 배기 %d CMH, %d초", site.gatewayId(),
+                params.path("supplyCmh").asInt(), params.path("exhaustCmh").asInt(), durationSec);
+        sendAck(commandId, "APPLIED", null);
+    }
+
+    /** 원격 명령 응답을 보낸다. 끊겨 있으면 버린다(끊긴 동안의 응답은 #9에서 다룬다). */
+    private void sendAck(String commandId, String result, String reason) {
+        Map<String, Object> ack = new LinkedHashMap<>();
+        ack.put("schemaVersion", TelemetryMessage.SCHEMA_VERSION);
+        ack.put("commandId", commandId);
+        ack.put("result", result);
+        if (reason != null) {
+            ack.put("reason", reason);
+        } else {
+            ack.put("appliedAt", OffsetDateTime.now(SEOUL));
+        }
+        try {
+            MqttMessage message = new MqttMessage(toJson(ack));
+            message.setQos(QOS_AT_LEAST_ONCE);
+            client.publish(commandTopic() + "/ack", message);
+        } catch (MqttException | RuntimeException e) {
+            Log.error("[%s] 원격 명령 응답 실패: %s", site.gatewayId(), e.getMessage());
+        }
+    }
+
     /** 이벤트를 버퍼에 넣고, 연결되어 있으면 바로 보낸다. 게이트웨이 스레드에서 부른다. */
     private void sendEvent(String type) {
         if (eventBuffer.add(DeviceEventMessage.of(site.vemcId(), type, OffsetDateTime.now(SEOUL)))) {
@@ -368,6 +430,10 @@ public class GatewaySimulator {
         }
     }
 
+    private String commandTopic() {
+        return "jabjaje/" + site.siteId() + "/" + site.ventilatorId() + "/command";
+    }
+
     private String eventTopic() {
         return "jabjaje/" + site.siteId() + "/" + site.vemcId() + "/event";
     }
@@ -397,7 +463,14 @@ public class GatewaySimulator {
 
         @Override
         public void messageArrived(String topic, MqttMessage message) {
-            // 아직 구독하는 토픽이 없다. 원격 명령은 #8에서 받는다.
+            // 원격 명령(#8). 생성기는 게이트웨이 스레드에서만 쓰므로 그 스레드에 맡긴다.
+            byte[] payload = message.getPayload();
+            try {
+                worker.execute(() -> handleCommand(payload));
+            } catch (java.util.concurrent.RejectedExecutionException e) {
+                // 종료 중이라 처리하지 않는다. 예외가 Paho까지 올라가면 연결이 끊긴다.
+                Log.error("[%s] 종료 중이라 원격 명령을 처리하지 않음", site.gatewayId());
+            }
         }
 
         @Override

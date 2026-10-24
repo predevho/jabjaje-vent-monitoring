@@ -41,13 +41,7 @@ class HoodInterlockApiTest extends MqttIntegrationTest {
 
     @BeforeEach
     void registerTestSite() {
-        jdbcTemplate.update("""
-                INSERT INTO site (id, name, region, floor_area_m2, occupants, target_airflow_cmh, target_airflow_source)
-                VALUES (?, '후드 테스트 현장', '테스트', 100.0, 3, 150, 'MINIMUM_AIRFLOW')
-                ON CONFLICT (id) DO NOTHING
-                """, SITE);
-        jdbcTemplate.update("INSERT INTO gateway (id, site_id, connection_state) VALUES ('gw-t90', ?, 'PENDING') "
-                + "ON CONFLICT (id) DO NOTHING", SITE);
+        registerTestSite(SITE, "gw-t90");
         registerTestDevice(SITE, "gw-t90", VENTILATOR, "VENTILATOR", "DOMEKT R 300V");
         registerTestDevice(SITE, "gw-t90", VEMC, "VEMC", "VEMC");
     }

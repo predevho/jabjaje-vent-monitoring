@@ -3,13 +3,14 @@
  *
  * 현장 하나의 기본 정보, 게이트웨이 상태, 열회수 환기장치의 최신 측정값을 보여준다.
  * 아직 측정값이 없으면 그렇다고 표시한다. 게이트웨이가 연결됨이 아니면 장비 상태를 알 수 없으므로
- * "확인 불가"로 표시하고 마지막 값을 흐리게 보여 준다 (용어집: 확인 불가, #6).
+ * "확인 불가"로 표시하고 마지막 값을 흐리게 보여 준다 (용어집: 확인 불가, #6). 부스트 버튼과 최근 원격 명령 상태를 보여 준다 (#8).
  *
  * @author predevho (AI 보조: Claude)
  * @since 2026-10-23 (#2)
  */
 import type { Device, Site } from '../types/site.ts'
 import type { Telemetry } from '../types/telemetry.ts'
+import BoostControl from './BoostControl.tsx'
 import Co2Chart from './Co2Chart.tsx'
 import ConnectionBadge from './ConnectionBadge.tsx'
 
@@ -31,6 +32,13 @@ interface Props {
   recentTelemetry: Telemetry[]
   /** "마지막 수신 N분 전"을 계산할 기준 시각 (#6) */
   now: Date
+}
+
+/** 부스트 버튼을 끌 이유 (#8, 스펙 6.3). 없으면 null */
+function boostDisabledReason(site: Site): string | null {
+  if (site.gateway?.connectionState !== 'CONNECTED') return '게이트웨이가 연결되지 않아 부스트를 보낼 수 없어요'
+  if (!site.gateway.capabilities?.includes('BOOST')) return '이 게이트웨이는 부스트를 지원하지 않아요'
+  return null
 }
 
 export default function SiteCard({ site, ventilator, telemetry, recentTelemetry, now }: Props) {
@@ -79,8 +87,10 @@ export default function SiteCard({ site, ventilator, telemetry, recentTelemetry,
               <td>{telemetry.filterPa} Pa</td>
             </tr>
             <tr>
-              <th>바이패스</th>
-              <td>{telemetry.bypass ? '켜짐' : '꺼짐'}</td>
+              <th>바이패스 / 부스트</th>
+              <td>
+                {telemetry.bypass ? '켜짐' : '꺼짐'} / {telemetry.boost ? '켜짐' : '꺼짐'}
+              </td>
             </tr>
             <tr>
               <th>측정 시각</th>
@@ -92,6 +102,13 @@ export default function SiteCard({ site, ventilator, telemetry, recentTelemetry,
         <p className="muted">아직 받은 측정값이 없어요.</p>
       )}
       {telemetry && <Co2Chart recentTelemetry={recentTelemetry} />}
+      {ventilator && (
+        <BoostControl
+          ventilatorId={ventilator.id}
+          targetAirflowCmh={site.targetAirflowCmh}
+          disabledReason={boostDisabledReason(site)}
+        />
+      )}
     </section>
   )
 }

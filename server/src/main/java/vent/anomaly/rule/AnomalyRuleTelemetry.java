@@ -12,6 +12,7 @@ import java.time.OffsetDateTime;
  * @param supplyCmh  급기량 (CMH, #5)
  * @param filterPa   필터 차압 (Pa)
  * @param bypass     바이패스 여부 (#5)
+ * @param boost      부스트 중인지 (#8)
  * @param late       늦은 측정값인지 (#5). 지금 상태 규칙은 쓰지 않는다 (스펙 6.2)
  * @author predevho (AI 보조: Claude)
  * @since 2026-10-24 (#4)
@@ -22,5 +23,6 @@ public record AnomalyRuleTelemetry(
         int supplyCmh,
         int filterPa,
         boolean bypass,
+        boolean boost,
         boolean late) {
 }

@@ -13,10 +13,9 @@ import vent.site.domain.type.DeviceType;
  * <ul>
  *   <li>발생: 급기가 목표 풍량의 80% 미만으로 30분 이어짐 → 주의(WARN)</li>
  *   <li>해제: 급기가 80%에 다시 도달한 측정값이 오면</li>
- *   <li>바이패스 중인 측정값으로는 판단하지 않는다. 바이패스가 끼면 이어진 구간도 끊긴다</li>
+ *   <li>바이패스·부스트 중인 측정값으로는 판단하지 않는다. 끼면 이어진 구간도 끊긴다 (부스트는 #8)</li>
  *   <li>늦은 측정값은 쓰지 않는다 (스펙 6.2)</li>
  * </ul>
- * 부스트 중 제외는 측정값에 부스트 여부가 생기는 #8에서 넣는다. 부스트는 급기를 올리므로 그 전에도 잘못 뜨지 않는다.
  *
  * @author predevho (AI 보조: Claude)
  * @since 2026-10-24 (#5)
@@ -50,13 +49,13 @@ public class AirflowBelowTargetRule implements DeviceAnomalyRule {
     @Override
     public AnomalyRuleOutcome evaluate(AnomalyRuleInput input) {
         List<AnomalyRuleTelemetry> live = input.live();
-        if (live.isEmpty() || live.get(0).bypass()) {
+        if (live.isEmpty() || excluded(live.get(0))) {
             return AnomalyRuleOutcome.unchanged();
         }
         AnomalyRuleTelemetry latest = live.get(0);
         double minimumCmh = input.targetAirflowCmh() * properties.ratio();
 
-        boolean below = AnomalyRuleStreak.lastedAtLeast(live, t -> !t.bypass() && t.supplyCmh() < minimumCmh,
+        boolean below = AnomalyRuleStreak.lastedAtLeast(live, t -> !excluded(t) && t.supplyCmh() < minimumCmh,
                 continuity.maxGap(), properties.lasting());
         if (below) {
             int percent = (int) Math.round(latest.supplyCmh() * 100.0 / input.targetAirflowCmh());
@@ -66,5 +65,10 @@ public class AirflowBelowTargetRule implements DeviceAnomalyRule {
             return AnomalyRuleOutcome.raise(AnomalySeverity.WARN, message, latest.measuredAt());
         }
         return latest.supplyCmh() >= minimumCmh ? AnomalyRuleOutcome.clear(latest.measuredAt()) : AnomalyRuleOutcome.unchanged();
+    }
+
+    /** 바이패스·부스트 중인 측정값은 목표 풍량과 비교하지 않는다 (스펙 6.1). */
+    private static boolean excluded(AnomalyRuleTelemetry telemetry) {
+        return telemetry.bypass() || telemetry.boost();
     }
 }

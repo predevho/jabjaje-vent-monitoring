@@ -47,6 +47,8 @@ public class MqttClientManager implements SmartLifecycle, MqttCallback {
     private static final Duration MAX_RECONNECT_DELAY = Duration.ofSeconds(30);
     /** 처리 실패 뒤 다시 연결하기까지 기다리는 시간. 그 사이 DB가 회복할 시간을 준다. */
     private static final long REDELIVERY_DELAY_MILLIS = 5_000;
+    /** 동기 발행이 브로커 응답(PUBACK)을 기다리는 최대 시간 (#8) */
+    private static final long PUBLISH_TIMEOUT_MILLIS = 5_000;
 
     private final MqttBrokerProperties properties;
     private final List<MqttMessageHandler> handlers;
@@ -72,6 +74,8 @@ public class MqttClientManager implements SmartLifecycle, MqttCallback {
         }
         client.setCallback(this);
         client.setManualAcks(true);
+        // 동기 발행·구독이 브로커 응답을 끝없이 기다리지 않게 한다. 원격 명령 발행은 HTTP 요청 스레드에서 일어난다(#8).
+        client.setTimeToWait(PUBLISH_TIMEOUT_MILLIS);
         running = true;
         executor.execute(this::connectWithRetry);
     }
@@ -102,6 +106,20 @@ public class MqttClientManager implements SmartLifecycle, MqttCallback {
     @Override
     public boolean isRunning() {
         return running;
+    }
+
+    /**
+     * 메시지 하나를 QoS 1로 발행한다(원격 명령, #8). retained는 쓰지 않는다. 다시 연결할 때 오래된 명령이 다시 실행되면
+     * 안 되기 때문이다(스펙 4.1). 브로커가 받았다고 응답(PUBACK)할 때까지 기다린다.
+     *
+     * @throws MqttException 연결이 끊겼거나 브로커가 거부했을 때
+     * @since 2026-10-24 (#8)
+     */
+    public void publish(String topic, byte[] payload) throws MqttException {
+        MqttMessage message = new MqttMessage(payload);
+        message.setQos(QOS_AT_LEAST_ONCE);
+        message.setRetained(false);
+        client.publish(topic, message);
     }
 
     /** 브로커에 연결되어 있고 모든 처리기의 토픽 구독을 마쳤는지. 이 전에 발행된 메시지는 서버가 받지 못할 수 있다. */
@@ -246,7 +264,7 @@ public class MqttClientManager implements SmartLifecycle, MqttCallback {
 
     @Override
     public void deliveryComplete(IMqttToken token) {
-        // 서버는 아직 발행하지 않는다. 원격 명령(#8)에서 쓴다.
+        // 원격 명령(#8)은 동기 발행이라 여기서 따로 할 일이 없다.
     }
 
     @Override

@@ -24,6 +24,8 @@ export interface Telemetry {
   exhaustCmh: number
   filterPa: number
   bypass: boolean
+  /** 부스트 중인지 (#8) */
+  boost: boolean
   quality: TelemetryQuality
   /** 연결이 끊긴 동안 모아 두었다가 나중에 받은 늦은 측정값인지 (#3) */
   late: boolean

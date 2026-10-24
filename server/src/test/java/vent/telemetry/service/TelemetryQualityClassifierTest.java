@@ -146,6 +146,6 @@ class TelemetryQualityClassifierTest {
 
     private static TelemetryMessage message(OffsetDateTime measuredAt, int co2Ppm, String tempC, String humidityPct) {
         return new TelemetryMessage(1, UUID.randomUUID(), "vent-s1", measuredAt,
-                co2Ppm, new BigDecimal(tempC), new BigDecimal(humidityPct), 205, 200, 85, false);
+                co2Ppm, new BigDecimal(tempC), new BigDecimal(humidityPct), 205, 200, 85, false, null);
     }
 }

@@ -132,6 +132,35 @@ td {
   opacity: 0.45;
 }
 
+/* 부스트 버튼과 원격 명령 상태 (#8) */
+.boost {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  border-top: 1px solid #eaeef2;
+  padding-top: 10px;
+}
+
+.boost button {
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid #0969da;
+  background: #0969da;
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.boost button:disabled {
+  border-color: #d1d9e0;
+  background: #eaeef2;
+  color: #818b98;
+  cursor: not-allowed;
+}
+
 /* 열린 이상 목록 (#4) */
 .anomaly-card {
   margin-bottom: 16px;

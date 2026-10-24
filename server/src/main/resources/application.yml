@@ -51,6 +51,13 @@ vent:
       lasting: 30m
     bypass-too-long:
       lasting: 60m
+  command:
+    # 부스트 요청 기준 (스펙 7.1, #8). 실제 최대 풍량은 제조사 매뉴얼로 확인해야 한다.
+    boost:
+      max-duration: 2h
+      model-max-airflow-cmh:
+        "[DOMEKT R 300V]": 300
+        "[DOMEKT R 450V]": 450
   hood:
     # 후드 연동 판정 (스펙 6.2, #7). HOOD_ON 직전 급기와 60초 뒤 첫 급기를 비교한다.
     interlock:

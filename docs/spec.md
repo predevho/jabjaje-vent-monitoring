@@ -117,7 +117,7 @@
   "measuredAt": "2026-10-24T10:00:00+09:00",
   "co2Ppm": 820, "tempC": 23.4, "humidityPct": 48,
   "supplyCmh": 180, "exhaustCmh": 175,
-  "filterPa": 85, "bypass": false
+  "filterPa": 85, "bypass": false, "boost": false
 }
 ```
 
@@ -129,6 +129,7 @@
 원격 명령:
 ```json
 {
+  "schemaVersion": 1,
   "commandId": "uuid",
   "type": "BOOST",
   "params": { "supplyCmh": 260, "exhaustCmh": 250, "durationSec": 1800 },
@@ -139,9 +140,10 @@
 
 명령 응답:
 ```json
-{ "commandId": "uuid", "result": "APPLIED", "appliedAt": "..." }
-{ "commandId": "uuid", "result": "REJECTED", "reason": "FROST_PROTECTION" }
+{ "schemaVersion": 1, "commandId": "uuid", "result": "APPLIED", "appliedAt": "..." }
+{ "schemaVersion": 1, "commandId": "uuid", "result": "REJECTED", "reason": "FROST_PROTECTION" }
 ```
+거절 사유는 장비 우선순위(7.3)를 따른다: `FROST_PROTECTION`(동결 방지), `HOOD_INTERLOCK`(후드 연동 중). 측정값에는 부스트 중인지(`boost`, #8)를 더했다. 없으면 `false`로 본다.
 
 ### 4.3 신뢰성 규칙
 - **중복**: QoS 1은 최소 한 번 전달이라 중복이 올 수 있다. `messageId`(측정값·이벤트), `commandId`(응답)로 걸러낸다.
@@ -160,7 +162,7 @@
   { "state": "online", "firmwareVersion": "1.2.0", "schemaVersion": 1,
     "capabilities": ["BOOST", "HOOD_EVENT"] }
   ```
-- 서버는 `capabilities`에 없는 명령을 보내지 않는다. 대시보드도 지원하지 않는 기능의 버튼을 숨긴다.
+- 서버는 `capabilities`에 없는 명령을 보내지 않는다. 대시보드도 지원하지 않는 기능의 버튼을 비활성화한다(#8, 이유를 함께 보여 준다).
 - 메시지 형식 변경은 **필드 추가만** 허용한다. 서버는 모르는 필드를 무시한다. 필드 삭제나 의미 변경이 필요하면 `schemaVersion`을 올리고, 구버전 게이트웨이가 남아 있는 동안 두 버전을 함께 처리한다.
 - 이상 기준, 규칙, AI 소견, 화면처럼 판단이 들어가는 로직은 서버에 둔다. 게이트웨이는 측정·전달·명령 적용·현장 연동만 한다. 기능 변경 대부분이 서버 배포로 끝나게 하기 위해서다.
 - `gateway` 테이블에 `firmware_version`, `capabilities`(jsonb)를 둔다(5장, V7). 버전을 보고하는 것은 게이트웨이다.
@@ -231,6 +233,7 @@ SERVICE_REQUEST 1──0..1 VERDICT
 | measured_at | timestamptz | 장비가 측정한 시각 |
 | received_at | timestamptz | 서버가 받은 시각 |
 | co2_ppm, temp_c, humidity_pct, supply_cmh, exhaust_cmh, filter_pa, bypass | | 측정값 |
+| boost | boolean | 부스트 중인지 (#8, 없으면 false) |
 | quality | varchar | `OK` / `OUT_OF_RANGE` / `CLOCK_SKEW` |
 | late | boolean | 버퍼에서 늦게 올라온 데이터 여부 |
 
@@ -267,14 +270,13 @@ SERVICE_REQUEST 1──0..1 VERDICT
 |---|---|---|
 | id | uuid PK | commandId |
 | device_id | varchar FK | |
-| type | varchar | `BOOST`, `BOOST_CANCEL` |
-| params | jsonb | |
-| status | varchar | `SENT` / `APPLIED` / `REJECTED` / `TIMEOUT` / `REJECTED_OFFLINE` / `SUPERSEDED` |
-| late_ack | boolean | 시간 초과 처리 후에 응답이 도착했는지 |
-| reject_reason | varchar | 장비가 거절한 이유 |
+| type | varchar | `BOOST` (`BOOST_CANCEL`은 아직 없음. 지속시간이 지나면 장비가 스스로 돌아온다) |
+| params | jsonb | `{supplyCmh, exhaustCmh, durationSec}` |
+| status | varchar | `SENT` / `APPLIED` / `REJECTED` / `REJECTED_OFFLINE` (#8). `TIMEOUT` / `SUPERSEDED`는 #9 |
+| reject_reason | varchar(40) | 장비가 거절한 이유 |
 | requested_by | varchar | `USER` |
-| sent_at, expires_at, acked_at | timestamptz | |
-| retry_count | int | |
+| requested_at, sent_at, acked_at | timestamptz | 보내지 않았으면 `sent_at`이 비어 있다 |
+| late_ack, expires_at, retry_count | | #9에서 추가 |
 
 **service_request** (A/S 신청)
 | 컬럼 | 타입 | 설명 |
@@ -360,7 +362,7 @@ SERVICE_REQUEST 1──0..1 VERDICT
 - **"N분 지속" 판단**: 최신 측정값부터 거꾸로 가며 조건을 만족하는 측정값이 끊기지 않고 이어진 구간을 찾는다. 첫 측정 시각부터 최신 측정 시각까지가 기준 시간 이상이면 지속이다. 측정값 사이가 2분(`vent.anomaly.continuity.max-gap`) 넘게 비면 구간이 끊긴다. 늦은 측정값을 뺀 빈자리를 이어 붙이지 않기 위해서다(#5).
 - 이미 열린 이상에 더 무거운 심각도가 나오면(CO2 1,500ppm 초과) 같은 이상의 심각도를 올린다. 해결될 때까지 내리지 않는다. 심각 판단도 1,000ppm 초과가 이어지는 동안에만 한다(#5).
 - 조회 범위(가장 긴 규칙 기준 + 2분) 안에 OK 측정값이 없으면 판단하지 않는다. 오래된 값으로 지금 상태를 해제하지 않기 위해서다.
-- `AIRFLOW_BELOW_TARGET`의 부스트 중 제외는 측정값에 부스트 여부가 생기는 #8에서 넣는다. 부스트는 급기를 올리므로 그 전에도 잘못 뜨지 않는다.
+- `AIRFLOW_BELOW_TARGET`은 바이패스·부스트 중 측정값을 쓰지 않는다. 부스트 여부는 측정값의 `boost`(#8)로 안다.
 - 지속 시간은 설정이다. 시연 때는 `VENT_CO2_LASTING=2m VENT_AIRFLOW_LASTING=2m VENT_BYPASS_LASTING=2m docker compose up -d`처럼 줄인다.
 - 규칙 하나를 클래스 하나로 만들고, 규칙마다 단위 테스트를 둔다.
 - 이상은 대시보드에 표시하고 로그로 남긴다. 사람에게 보내는 알림(슬랙, 카카오 등)은 MVP 범위 밖이다.
@@ -387,9 +389,10 @@ SERVICE_REQUEST 1──0..1 VERDICT
 
 ### 7.1 흐름
 1. 사용자가 대시보드에서 부스트를 요청한다.
-2. 서버가 게이트웨이 상태를 확인한다. `CONNECTED`가 아니면(일시 끊김, 오프라인) 명령을 보내지 않고 `REJECTED_OFFLINE`으로 기록한 뒤 "지금은 연결이 끊겨 명령을 보낼 수 없어요"로 안내한다.
-3. 서버가 파라미터를 검증한다. 풍량은 모델 최대 풍량 이하, 지속시간은 최대 2시간 이하.
-4. `command`를 `SENT`로 저장하고 발행한다. `expiresAt`은 발행 후 60초다.
+2. 서버가 게이트웨이 상태를 확인한다. `CONNECTED`가 아니면(연결 전, 일시 끊김, 오프라인) 명령을 보내지 않고 `REJECTED_OFFLINE`으로 기록한 뒤 "지금은 게이트웨이가 연결되지 않아 명령을 보낼 수 없어요"로 안내한다(연결 전에도 쓰도록 "끊겨"에서 바꿈, #8).
+3. 서버가 파라미터를 검증한다. 풍량은 모델 최대 풍량 이하, 지속시간은 최대 2시간 이하. 게이트웨이 지원 기능에 BOOST가 있어야 한다(4.4).
+   - 구현(#8): 잘못된 요청(환기장치가 아님, BOOST 미지원, 모델 최대 풍량 초과, 지속시간 범위 밖)은 기록하지 않고 400으로 돌려준다. 요청이 맞으면 연결 상태를 본다(2단계). 배기는 급기와 같은 값으로 함께 올린다(7.4).
+4. `command`를 `SENT`로 저장하고 발행한다. `expiresAt`은 발행 후 60초다. 발행은 저장이 커밋된 뒤에 한다. 먼저 발행하고 저장이 실패하면 장비가 서버가 모르는 명령을 적용하기 때문이다(#8).
 5. 장비는 만료, 중복, 자기 보호 로직을 확인한 뒤 적용하거나 거절하고 응답한다.
 6. 서버는 응답을 받아 `APPLIED` 또는 `REJECTED`로 바꾼다.
 7. 10초 동안 응답이 없으면 같은 `commandId`로 1회 재시도한다. 그래도 없으면 `TIMEOUT`으로 바꾸고 `COMMAND_TIMEOUT` 이상을 만든다.
@@ -420,6 +423,8 @@ SERVICE_REQUEST 1──0..1 VERDICT
 1. 장비 자기 보호 로직(동결 방지, 풍량 한계)
 2. 현장 VEMC 연동
 3. 사용자 원격 명령
+
+시뮬레이터는 동결 방지(`FROST_PROTECTION`)와 후드 연동 중(`HOOD_INTERLOCK`)만 흉내 낸다. 풍량 한계는 서버가 보내기 전에 모델 최대 풍량으로 막는다(#8). 실제 장비는 자기 한계를 따로 지킨다.
 
 ### 7.4 부스트는 급기와 배기를 함께 올린다
 급기만 올리면 실내가 과도한 양압이 되어 문틈 소음, 벽체 내부 결로 위험이 생긴다. 원격 부스트는 급·배기 균형을 유지한 채 함께 올린다. 급기를 올리고 배기를 내리는 것은 후드가 켜졌을 때 VEMC만 한다.
@@ -664,6 +669,7 @@ v1 설계를 통신 안정성, 보안, 제어 안전, 데이터 품질, AI, 운�
   - A/S 접수 → A/S 신청(`as_ticket` → `service_request`), 1차 진단 → AI 소견(`ai_assessment`), 진단 검토 → 판정(`verdict` 테이블 추가)
   - 숫자 기준 문장에서 "이상"(≥) 대신 "넘게", "도달" 사용
 - v12: #13 반영. 브로커 계정·ACL(최소 권한), 익명 거부, 비밀번호는 시작할 때 환경변수로 생성, 계정 이름 = 클라이언트 ID, TLS·장비별 인증서는 README에 운영 대응으로
+- v13: #8 반영. 부스트 왕복(커밋 뒤 발행, QoS 1·retained 없음, 적용·거절 응답), 잘못된 요청은 400·기록 안 함, 거절 사유(동결 방지, 후드 연동 중), 측정값 `boost`와 목표 풍량 미달의 부스트 제외, command 테이블은 #8 컬럼만(V9)
 - v11: #7 반영. 후드 연동 확인 기준(직전 값과 60초 뒤 첫 값, 10% 넘게 상승), 확인 보류 조건, `device_event.interlock_result`·`judged_at`(V8)
 - v10: #5 반영. "N분 지속" 판단(이어진 구간, 2분 넘게 비면 끊김), CO2 심각도 올리기, 목표 풍량 미달의 바이패스 제외(부스트는 #8), 최소 환기량 계산과 API 표시, 지속 시간 설정
 - v9: #4, #6 반영. 이상 테이블(V6, 부분 유니크 인덱스 2개)과 `FILTER_CLOGGED` 해제 130Pa(ADR-0013). 게이트웨이 연결 상태(V7: 수신 시각, 끊긴 시각, 버전, 지원 기능), 수신으로 보는 것과 retained 처리, `GATEWAY_OFFLINE`을 상태 변경과 같은 트랜잭션에서(ADR-0014)
