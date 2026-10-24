@@ -222,3 +222,141 @@ td {
   border-radius: 50%;
   margin-left: 6px;
 }
+
+/* A/S 신청과 AI 소견 (#10) */
+.service-request-card {
+  margin-top: 16px;
+}
+
+.service-request-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px 12px;
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.service-request-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #424a53;
+}
+
+.service-request-form .wide {
+  grid-column: 1 / -1;
+}
+
+.service-request-form input,
+.service-request-form select,
+.service-request-form textarea {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid #d1d9e0;
+  border-radius: 6px;
+  color: #1f2328;
+  background: #fff;
+}
+
+.service-request-form button {
+  align-self: end;
+  font: inherit;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #0969da;
+  background: #0969da;
+  color: #fff;
+  cursor: pointer;
+}
+
+.service-request-form button:disabled {
+  border-color: #d1d9e0;
+  background: #eaeef2;
+  color: #818b98;
+  cursor: not-allowed;
+}
+
+.service-request-table th,
+.service-request-table td {
+  text-align: left;
+  padding: 6px 8px 6px 0;
+  vertical-align: top;
+}
+
+.service-request-message {
+  color: #424a53;
+}
+
+.badge-request-received {
+  background: #eaeef2;
+  color: #424a53;
+}
+
+.badge-request-assessed {
+  background: #dafbe1;
+  color: #116329;
+}
+
+.badge-request-needs-human {
+  background: #ffebe9;
+  color: #82071e;
+}
+
+.badge-request-decided {
+  background: #ddf4ff;
+  color: #0a3069;
+}
+
+tr.clickable {
+  cursor: pointer;
+}
+
+tr.selected {
+  background: #ddf4ff;
+}
+
+.service-request-detail {
+  margin-top: 12px;
+  border-top: 1px solid #eaeef2;
+  padding-top: 10px;
+}
+
+.service-request-detail h3 {
+  font-size: 15px;
+  margin: 0;
+}
+
+.customer-message {
+  white-space: pre-wrap;
+  margin: 8px 0 4px;
+}
+
+.assessment-table th,
+.assessment-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 4px 8px 4px 0;
+}
+
+.assessment-table th {
+  width: 90px;
+}
+
+.assessment-table ol {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.failed-attempts {
+  font-size: 13px;
+  color: #82071e;
+}
+
+.raw-response {
+  background: #f6f8fa;
+  color: #1f2328;
+  padding: 6px 8px;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}

@@ -58,6 +58,11 @@ services:
       VENT_ANOMALY_CO2HIGH_LASTING: ${VENT_CO2_LASTING:-10m}
       VENT_ANOMALY_AIRFLOWBELOWTARGET_LASTING: ${VENT_AIRFLOW_LASTING:-30m}
       VENT_ANOMALY_BYPASSTOOLONG_LASTING: ${VENT_BYPASS_LASTING:-60m}
+      # A/S 신청 AI 소견 (#10). 상황 요약 기간은 7일이지만, 막 띄운 시연에는 데이터가 몇 분뿐이라 데이터 부족으로 판단을
+      # 보류한다. 시연 때는 짧게: VENT_ASSESSMENT_WINDOW=15m docker compose up -d
+      VENT_ASSESSMENT_WINDOW: ${VENT_ASSESSMENT_WINDOW:-7d}
+      # 가짜 AI 응답 방식. 검증 실패 시연: VENT_ASSESSMENT_FAKE_MODE=bad-part docker compose up -d
+      VENT_ASSESSMENT_FAKE_MODE: ${VENT_ASSESSMENT_FAKE_MODE:-normal}
     ports:
       - "8080:8080"
 

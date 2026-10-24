@@ -2,7 +2,7 @@
  * 대시보드 화면.
  *
  * 열린 이상 목록(#4), 현장 목록, 장비별 최신 측정값, 환기장치별 최근 측정값(그래프용)을 불러와 보여주고,
- * 측정 주기(30초)마다 다시 불러온다.
+ * 측정 주기(30초)마다 다시 불러온다. 아래에 A/S 신청 패널(#10)을 둔다.
  *
  * @author predevho (AI 보조: Claude)
  * @since 2026-10-23 (#2)
@@ -12,6 +12,7 @@ import { fetchAnomalies } from '../api/anomalies.ts'
 import { fetchSites } from '../api/sites.ts'
 import { fetchLatestTelemetry, fetchRecentTelemetry } from '../api/telemetry.ts'
 import AnomalyList from '../components/AnomalyList.tsx'
+import ServiceRequestPanel from '../components/ServiceRequestPanel.tsx'
 import SiteCard from '../components/SiteCard.tsx'
 import type { Anomaly } from '../types/anomaly.ts'
 import type { Device, Site } from '../types/site.ts'
@@ -89,6 +90,7 @@ export default function DashboardPage() {
           )
         })}
       </div>
+      <ServiceRequestPanel sites={sites} />
     </main>
   )
 }

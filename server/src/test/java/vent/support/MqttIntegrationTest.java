@@ -80,6 +80,8 @@ public abstract class MqttIntegrationTest {
         registry.add("vent.hood.interlock.check-enabled", () -> "false");
         // 원격 명령 재시도 스케줄러도 끈다. 테스트가 확인 시각을 직접 넣어 부른다(#9).
         registry.add("vent.command.reliability.check-enabled", () -> "false");
+        // 접수된 A/S 신청 재처리 스케줄러도 끈다. 테스트가 직접 부른다(#10).
+        registry.add("vent.assessment.pending-check-enabled", () -> "false");
     }
 
     protected static MqttClient gateway;

@@ -78,6 +78,27 @@ vent:
       interrupted-after: 2m
       offline-after: 30m
       check-interval: 30s
+  assessment:
+    # A/S 신청 AI 소견 (스펙 8장, #10). 상황 요약은 최근 7일, 검증 실패 시 1회 재시도
+    window: 7d
+    telemetry-interval: 30s
+    max-attempts: 2
+    # AI 호출 한 번의 최대 대기 시간. pending-after는 call-timeout × max-attempts보다 길어야 한다
+    call-timeout: 30s
+    pending-after: 2m
+    pending-check-interval: 60s
+    # 판매 중인 교체 부품. AI 입력과 검증에 같이 쓴다
+    parts:
+      - DOMEKT R 300V 교체 필터 세트
+      - DOMEKT R 450V 교체 필터 세트
+      - VEMC 신호 케이블
+      - 급기 디퓨저
+      - 배기 그릴
+    # AI 구현: fake(가짜, 기본). 실제 Claude 구현은 #12
+    client: fake
+    # 가짜 AI 응답 방식: normal, bad-part, bad-evidence, forbidden-phrase, broken-json, flaky, unavailable
+    fake:
+      mode: normal
   mqtt:
     # Docker Compose overrides this with the broker's service name.
     server-uri: tcp://localhost:1883

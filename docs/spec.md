@@ -287,17 +287,22 @@ SERVICE_REQUEST 1──0..1 VERDICT
 | site_id | bigint FK | |
 | device_id | varchar FK, nullable | 고객이 장비를 특정하지 못할 수 있음 |
 | customer_message | text | |
+| customer_name, contact_phone | varchar, nullable | 고객 이름·연락처. 직원만 보고 AI에는 보내지 않는다 (#10) |
 | status | varchar | `RECEIVED` / `ASSESSED` / `NEEDS_HUMAN` / `DECIDED` |
 | created_at | timestamptz | |
+| assessment_started_at | timestamptz, nullable | 백그라운드에서 AI 소견을 맡은 시각. 두 곳이 같은 건을 동시에 처리하지 않게 한다 (#10, ADR-0015) |
 
 **ai_assessment** (AI 소견)
 | 컬럼 | 타입 | 설명 |
 |---|---|---|
 | id | bigint PK | |
 | service_request_id | bigint FK | |
+| attempt | int | 몇 번째 시도인지. 시도마다 한 행 (`UNIQUE(service_request_id, attempt)`, #10) |
 | input_snapshot | jsonb | AI에 보낸 입력 사본 |
-| result | jsonb | 원인 후보, 조치, 부품, 방문 필요 여부, 고객 안내문 초안 |
+| result | jsonb | 원인 후보, 조치, 부품, 방문 필요 여부, 고객 안내문 초안. 형식 오류면 비어 있다 |
+| raw_response | text | AI 응답 원문 (#10) |
 | validation_errors | jsonb | 검증에서 걸린 항목 |
+| passed | boolean | 검증 통과 여부 (#10) |
 | model | varchar | |
 | created_at | timestamptz | |
 
@@ -452,6 +457,7 @@ SERVICE_REQUEST 1──0..1 VERDICT
 
 ### 8.2 상황 요약 (코드가 계산)
 - 원본 측정값 대신 통계만 보낸다. 예: 평균·최대 CO2, 급기 대비 목표 풍량 비율, 필터 차압 추세(7일 전 → 현재), 바이패스 누적 시간, 후드 연동 성공률, 오프라인 횟수.
+- 구현(#10): 지표는 `co2AvgPpm`, `co2MaxPpm`, `supplyToTargetRatio`(바이패스·부스트 제외), `filterPaTrend`(기간 첫 7분의 1 평균 → 최근 값), `bypassHours`·`bypassShare`, `hoodInterlockSuccessRate`(확인 보류 제외), `offlineCount`(열린 것 + 기간 안에 생긴 것), `dataCoverage`(받은 측정값 ÷ 받았어야 할 수), `openAnomalies`, `recentAnomalies`. 현장은 지역·면적·인원·목표 풍량·최소 환기량과 장비 종류·모델만 넣는다. 계산할 데이터가 없는 지표는 비워 두고, 근거로 쓸 수 없다.
 - 숫자 계산은 코드가 하고 AI는 해석만 한다.
 - 고객 이름, 주소, 연락처는 보내지 않는다. 지역과 장비 정보만 보낸다.
 
@@ -467,7 +473,7 @@ SERVICE_REQUEST 1──0..1 VERDICT
 {
   "causes": [
     { "title": "필터 막힘으로 급기 부족", "likelihood": "HIGH",
-      "evidence": ["filterPaTrend", "supplyToDesignRatio"] }
+      "evidence": ["filterPaTrend", "supplyToTargetRatio"] }
   ],
   "technicianActions": ["필터 교체", "교체 후 풍량 재측정"],
   "parts": ["DOMEKT R 300V 교체 필터 세트"],
@@ -483,11 +489,13 @@ SERVICE_REQUEST 1──0..1 VERDICT
 - `parts`가 부품 목록에 있는지 확인한다.
 - `customerReply`에 금액, 무상 교체 약속, 보증 관련 표현이 있으면 걸러낸다(프롬프트 인젝션 대응).
 - 실패하면 1회 재시도하고, 그래도 실패하면 `NEEDS_HUMAN`으로 넘기고 `validation_errors`에 이유를 남긴다.
+- 구현(#10): 근거는 이번 상황 요약에서 값이 있는 지표만 허용한다. 금지 표현은 금액(원·천 원·만 원·₩), 무상·무료·공짜·비용 없음, 보증·환불·보상. 고객 문의 안의 구분 태그는 지운다. 시도마다 `ai_assessment` 한 행(입력 사본, 원문, 오류)을 남기고, 신청 하나에 시도는 최대 2번이다.
 
 ### 8.6 장애 대응
 - API 호출 타임아웃을 둔다. 실패하면 `NEEDS_HUMAN`.
 - AI 호출부는 인터페이스로 분리한다. 실제 구현과 가짜 구현(고정 응답)을 둔다. API 키가 없거나 네트워크가 안 되면 가짜 구현으로 시연할 수 있다.
 - API 키는 환경변수로만 주입하고 저장소에 올리지 않는다.
+- 구현(#10): 접수는 저장만 하고 커밋 뒤 AI 소견 전용 스레드(2개)에서 처리한다. AI를 부르는 동안 DB 트랜잭션을 열지 않는다. 신청을 한 줄 UPDATE로 맡고, 서버가 도중에 꺼지면 접수됨으로 남은 신청을 60초 주기 재처리가 다시 맡는다(맡은 지 2분 지난 것만). 호출 대기 시간(`call-timeout` 30초) × 시도 수보다 재처리 기준이 길어야 한다(시작할 때 검사). AI를 부를 수 없거나 상황 요약을 만들 수 없으면 `NEEDS_HUMAN`. 가짜 구현은 시나리오 6가지 응답과 일부러 틀린 응답(없는 부품, 없는 근거, 금지 표현, 형식 오류, 첫 시도만 틀림, 응답 없음)을 낸다(ADR-0015).
 
 ### 8.7 평가 세트
 시뮬레이터로 시나리오 5개를 만들고, AI가 1순위로 꼽은 원인이 정답과 맞는지 확인한다.
@@ -679,6 +687,7 @@ v1 설계를 통신 안정성, 보안, 제어 안전, 데이터 품질, AI, 운�
   - A/S 접수 → A/S 신청(`as_ticket` → `service_request`), 1차 진단 → AI 소견(`ai_assessment`), 진단 검토 → 판정(`verdict` 테이블 추가)
   - 숫자 기준 문장에서 "이상"(≥) 대신 "넘게", "도달" 사용
 - v12: #13 반영. 브로커 계정·ACL(최소 권한), 익명 거부, 비밀번호는 시작할 때 환경변수로 생성, 계정 이름 = 클라이언트 ID, TLS·장비별 인증서는 README에 운영 대응으로
+- v15: #10 반영. A/S 신청 접수(즉시 `RECEIVED`)와 백그라운드 AI 소견, 상황 요약 지표(바이패스 시간·비율, 데이터 충분도, 장비 목록), 검증(값 있는 지표만 근거, 금액·무상 표현 확대, 태그 제거), 시도마다 기록·최대 2번, 맡기·재처리(ADR-0015), 가짜 AI 모드, `service_request` 고객 이름·연락처·맡은 시각과 `ai_assessment` 시도·원문·통과 컬럼(V11), 8.4 예시의 `supplyToDesignRatio` → `supplyToTargetRatio`
 - v14: #9 반영. 재시도(2초 주기, 같은 commandId·만료 시각), 시간 초과와 `COMMAND_TIMEOUT`, 밀려남, 늦은 응답(적용·거절), MQTT 5 메시지 만료(남은 시간), 장비 세션 유지·0.5초 묶음·commandId 기억·응답 버퍼, 조용한 끊김 시나리오, V10
 - v13: #8 반영. 부스트 왕복(커밋 뒤 발행, QoS 1·retained 없음, 적용·거절 응답), 잘못된 요청은 400·기록 안 함, 거절 사유(동결 방지, 후드 연동 중), 측정값 `boost`와 목표 풍량 미달의 부스트 제외, command 테이블은 #8 컬럼만(V9)
 - v11: #7 반영. 후드 연동 확인 기준(직전 값과 60초 뒤 첫 값, 10% 넘게 상승), 확인 보류 조건, `device_event.interlock_result`·`judged_at`(V8)
