@@ -112,13 +112,17 @@ public class MqttClientManager implements SmartLifecycle, MqttCallback {
      * 메시지 하나를 QoS 1로 발행한다(원격 명령, #8). retained는 쓰지 않는다. 다시 연결할 때 오래된 명령이 다시 실행되면
      * 안 되기 때문이다(스펙 4.1). 브로커가 받았다고 응답(PUBACK)할 때까지 기다린다.
      *
+     * @param expirySeconds MQTT 5 메시지 만료(초, #9). 이 시간이 지나면 브로커가 받는 쪽에 넘기지 않고 버린다
      * @throws MqttException 연결이 끊겼거나 브로커가 거부했을 때
      * @since 2026-10-24 (#8)
      */
-    public void publish(String topic, byte[] payload) throws MqttException {
+    public void publish(String topic, byte[] payload, long expirySeconds) throws MqttException {
         MqttMessage message = new MqttMessage(payload);
         message.setQos(QOS_AT_LEAST_ONCE);
         message.setRetained(false);
+        MqttProperties messageProperties = new MqttProperties();
+        messageProperties.setMessageExpiryInterval(expirySeconds);
+        message.setProperties(messageProperties);
         client.publish(topic, message);
     }
 

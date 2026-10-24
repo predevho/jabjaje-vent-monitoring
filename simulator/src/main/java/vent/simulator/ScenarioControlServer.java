@@ -32,6 +32,7 @@ import java.util.stream.Collectors;
  * POST /sites/{현장ID}/frost-on        동결 방지 켜짐 (부스트를 거절, #8)
  * POST /sites/{현장ID}/frost-off       동결 방지 꺼짐
  * POST /sites/{현장ID}/network-down    네트워크 끊김 (Last Will, #6)
+ * POST /sites/{현장ID}/network-silent  조용한 끊김 (Last Will 없음, 서버는 2분까지 모름, #9)
  * POST /sites/{현장ID}/network-up      네트워크 복구 (#6)
  * GET  /health                         동작 확인
  * </pre>
@@ -59,6 +60,7 @@ public final class ScenarioControlServer {
             Map.entry("frost-on", g -> g.changeTelemetry("동결 방지 켜짐", t -> t.setFrostProtection(true))),
             Map.entry("frost-off", g -> g.changeTelemetry("동결 방지 꺼짐", t -> t.setFrostProtection(false))),
             Map.entry("network-down", GatewaySimulator::networkDown),
+            Map.entry("network-silent", GatewaySimulator::networkSilent),
             Map.entry("network-up", GatewaySimulator::networkUp));
 
     private final HttpServer server;

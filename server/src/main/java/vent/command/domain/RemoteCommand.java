@@ -53,14 +53,31 @@ public class RemoteCommand {
 
     private OffsetDateTime ackedAt;
 
+    /** 만료 시각 (#9). 재시도해도 바뀌지 않는다 */
+    private OffsetDateTime expiresAt;
+
+    /** 재시도 횟수 (#9) */
+    private int retryCount;
+
+    /** 마지막으로 재시도한 시각 (#9) */
+    private OffsetDateTime retriedAt;
+
+    /** 시간 초과 뒤에 온 응답인지 (#9, 스펙 7.2 늦은 응답) */
+    private boolean lateAck;
+
     protected RemoteCommand() {
     }
 
-    /** 게이트웨이로 보내는 부스트 명령. */
-    public static RemoteCommand sentBoost(String deviceId, BoostParams params, OffsetDateTime now) {
+    /**
+     * 게이트웨이로 보내는 부스트 명령.
+     *
+     * @param expiresAt 만료 시각 (#9). 장비는 이 시각이 지난 명령을 버린다
+     */
+    public static RemoteCommand sentBoost(String deviceId, BoostParams params, OffsetDateTime now, OffsetDateTime expiresAt) {
         RemoteCommand command = boost(deviceId, params, now);
         command.status = RemoteCommandStatus.SENT;
         command.sentAt = now;
+        command.expiresAt = expiresAt;
         return command;
     }
 
@@ -83,34 +100,80 @@ public class RemoteCommand {
     }
 
     /**
-     * 장비가 적용했다는 응답을 반영한다. 응답을 기다리는 중일 때만 바꾸고, 이미 끝난 명령이면 아무것도 하지 않는다(중복 응답).
+     * 장비가 적용했다는 응답을 반영한다. 응답을 기다리는 중이거나 시간 초과(늦은 응답)일 때만 바꾸고,
+     * 그 밖에 이미 끝난 명령이면 아무것도 하지 않는다(중복 응답, 밀려난 명령).
      *
      * @return 바꿨으면 true
      */
     public boolean markApplied(OffsetDateTime ackedAt) {
-        if (status.isFinal()) {
+        if (!acceptsAck()) {
             return false;
         }
+        this.lateAck = status == RemoteCommandStatus.TIMEOUT;
         this.status = RemoteCommandStatus.APPLIED;
         this.ackedAt = ackedAt;
         return true;
     }
 
     /**
-     * 장비가 거절했다는 응답을 반영한다. 응답을 기다리는 중일 때만 바꾼다.
+     * 장비가 거절했다는 응답을 반영한다. 응답을 기다리는 중이거나 시간 초과(늦은 응답)일 때만 바꾼다.
      *
      * @return 바꿨으면 true
      */
     public boolean markRejected(String reason, OffsetDateTime ackedAt) {
-        if (status.isFinal()) {
+        if (!acceptsAck()) {
             return false;
         }
+        this.lateAck = status == RemoteCommandStatus.TIMEOUT;
         this.status = RemoteCommandStatus.REJECTED;
         // 장비가 보낸 값이라 길이를 믿지 않는다. 너무 길면 저장이 실패해 응답이 버려지고 명령이 보냄으로 남는다.
         this.rejectReason = reason == null || reason.length() <= MAX_REJECT_REASON_LENGTH
                 ? reason : reason.substring(0, MAX_REJECT_REASON_LENGTH);
         this.ackedAt = ackedAt;
         return true;
+    }
+
+    /**
+     * 같은 commandId로 다시 보냈다 (#9). 만료 시각은 그대로다. 재시도가 만료를 늘리면 안 된다.
+     *
+     * @since 2026-10-24 (#9)
+     */
+    public void markRetried(OffsetDateTime now) {
+        retryCount++;
+        retriedAt = now;
+    }
+
+    /**
+     * 재시도 뒤에도 응답이 없어 시간 초과로 바꾼다 (#9). 응답을 기다리는 중일 때만 바꾼다.
+     *
+     * @return 바꿨으면 true
+     * @since 2026-10-24 (#9)
+     */
+    public boolean markTimedOut() {
+        if (status != RemoteCommandStatus.SENT) {
+            return false;
+        }
+        status = RemoteCommandStatus.TIMEOUT;
+        return true;
+    }
+
+    /**
+     * 같은 장비에 새 명령이 와서 밀려났다 (#9, ADR-0002 장비당 대기 명령 하나). 응답을 기다리는 중일 때만 바꾼다.
+     *
+     * @return 바꿨으면 true
+     * @since 2026-10-24 (#9)
+     */
+    public boolean markSuperseded() {
+        if (status != RemoteCommandStatus.SENT) {
+            return false;
+        }
+        status = RemoteCommandStatus.SUPERSEDED;
+        return true;
+    }
+
+    /** 응답을 받을 수 있는 상태인지: 기다리는 중이거나, 시간 초과 뒤 늦은 응답 */
+    private boolean acceptsAck() {
+        return status == RemoteCommandStatus.SENT || status == RemoteCommandStatus.TIMEOUT;
     }
 
     public UUID getId() {
@@ -151,5 +214,21 @@ public class RemoteCommand {
 
     public OffsetDateTime getAckedAt() {
         return ackedAt;
+    }
+
+    public OffsetDateTime getExpiresAt() {
+        return expiresAt;
+    }
+
+    public int getRetryCount() {
+        return retryCount;
+    }
+
+    public OffsetDateTime getRetriedAt() {
+        return retriedAt;
+    }
+
+    public boolean isLateAck() {
+        return lateAck;
     }
 }

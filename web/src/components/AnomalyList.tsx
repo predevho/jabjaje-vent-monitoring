@@ -16,6 +16,7 @@ const RULE_LABELS: Record<AnomalyRuleName, string> = {
   BYPASS_TOO_LONG: '바이패스 지속',
   GATEWAY_OFFLINE: '게이트웨이 오프라인',
   VEMC_NO_RESPONSE: 'VEMC 무반응',
+  COMMAND_TIMEOUT: '원격 명령 시간 초과',
 }
 
 const SEVERITY_LABELS: Record<AnomalySeverity, string> = {

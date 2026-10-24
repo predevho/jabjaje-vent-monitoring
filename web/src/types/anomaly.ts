@@ -15,6 +15,7 @@ export type AnomalyRuleName =
   | 'BYPASS_TOO_LONG'
   | 'GATEWAY_OFFLINE'
   | 'VEMC_NO_RESPONSE'
+  | 'COMMAND_TIMEOUT'
 
 /** 심각도: 정보, 주의, 심각 */
 export type AnomalySeverity = 'INFO' | 'WARN' | 'CRITICAL'

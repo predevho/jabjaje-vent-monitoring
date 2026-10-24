@@ -1,10 +1,14 @@
 package vent.site.repository;
 
+import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import vent.site.domain.Device;
 import vent.site.domain.type.DeviceType;
 
@@ -32,4 +36,13 @@ public interface DeviceRepository extends JpaRepository<Device, String> {
      * @since 2026-10-24 (#7)
      */
     Optional<Device> findFirstBySiteIdAndTypeOrderByIdAsc(Long siteId, DeviceType type);
+
+    /**
+     * 장비 하나를 잠가서 읽는다. 같은 장비에 대한 원격 명령 요청을 한 줄로 세울 때 쓴다(#9).
+     *
+     * @since 2026-10-24 (#9)
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select d from Device d where d.id = :id")
+    Optional<Device> findByIdForUpdate(@Param("id") String id);
 }

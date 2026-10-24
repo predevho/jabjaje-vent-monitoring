@@ -30,6 +30,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import vent.command.service.CommandRetryService;
 import vent.support.MqttIntegrationTest;
 
 /**
@@ -38,6 +39,7 @@ import vent.support.MqttIntegrationTest;
  * <p>테스트 지점: 부스트 API와 실제 브로커. 테스트용 게이트웨이 클라이언트가 command 토픽을 구독해 서버가 보낸 명령을 받고,
  * 적용·거절 응답을 보낸 뒤 명령 API로 상태를 확인한다. 게이트웨이 연결 상태가 다른 테스트와 섞이지 않도록 전용 현장 두 곳
  * (연결됨 92번, 일시 끊김 93번)을 쓰고, 테스트마다 연결 상태를 DB에 직접 맞춘다. 연결 상태가 바뀌는 과정은 #6 테스트가 확인한다.
+ * 재시도·시간 초과(#9)는 응답을 일부러 보내지 않는 전용 현장(94번)에서, 재시도 스케줄러를 끄고 확인 시각을 넣어 부른다.
  *
  * @author predevho (AI 보조: Claude)
  * @since 2026-10-24 (#8)
@@ -46,6 +48,11 @@ class RemoteCommandApiTest extends MqttIntegrationTest {
 
     private static final String CONNECTED_VENTILATOR = "vent-t92";
     private static final String INTERRUPTED_VENTILATOR = "vent-t93";
+    private static final String SILENT_VENTILATOR = "vent-t94";
+    private static final String COMMAND_TIMEOUT_OF = "$[?(@.rule == 'COMMAND_TIMEOUT' && @.deviceId == '%s')]";
+
+    @Autowired
+    private CommandRetryService retryService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -59,12 +66,16 @@ class RemoteCommandApiTest extends MqttIntegrationTest {
         registerTestDevice(92, "gw-t92", CONNECTED_VENTILATOR, "VENTILATOR", "DOMEKT R 300V");
         registerTestSite(93, "gw-t93");
         registerTestDevice(93, "gw-t93", INTERRUPTED_VENTILATOR, "VENTILATOR", "DOMEKT R 300V");
+        registerTestSite(94, "gw-t94");
+        registerTestDevice(94, "gw-t94", SILENT_VENTILATOR, "VENTILATOR", "DOMEKT R 300V");
 
         // 둘 다 BOOST를 지원한다고 보고했다. 92번은 연결됨, 93번은 일시 끊김.
         jdbcTemplate.update("""
                 UPDATE gateway SET connection_state = 'CONNECTED', last_received_at = now(), disconnected_at = NULL,
-                       capabilities = '["BOOST", "HOOD_EVENT"]'::jsonb WHERE id = 'gw-t92'
+                       capabilities = '["BOOST", "HOOD_EVENT"]'::jsonb WHERE id IN ('gw-t92', 'gw-t94')
                 """);
+        // 다른 테스트가 남긴 응답 대기 명령이 재시도 확인에 섞이지 않게 정리한다.
+        jdbcTemplate.update("UPDATE command SET status = 'SUPERSEDED' WHERE status = 'SENT'");
         jdbcTemplate.update("""
                 UPDATE gateway SET connection_state = 'INTERRUPTED', last_received_at = now(), disconnected_at = now(),
                        capabilities = '["BOOST", "HOOD_EVENT"]'::jsonb WHERE id = 'gw-t93'
@@ -165,6 +176,85 @@ class RemoteCommandApiTest extends MqttIntegrationTest {
         await().during(Duration.ofSeconds(2)).atMost(Duration.ofSeconds(4)).untilAsserted(() ->
                 mockMvc.perform(get("/api/devices/" + CONNECTED_VENTILATOR + "/commands"))
                         .andExpect(jsonPath("$[?(@.commandId == '%s')].status".formatted(commandId)).value("APPLIED")));
+    }
+
+    @Test
+    @DisplayName("응답이 없으면 같은 commandId로 한 번 재시도하고(메시지 만료 60초 안), 그래도 없으면 시간 초과와 COMMAND_TIMEOUT. "
+            + "늦게 적용 응답이 오면 늦게 적용됨과 이상 해제")
+    void retryTimeoutAndLateAck() throws Exception {
+        String commandId = requestBoost(SILENT_VENTILATOR, 250, 600, "SENT");
+        MqttMessage first = awaitCommand(commandId);
+        assertThat(first.getProperties().getMessageExpiryInterval()).isBetween(50L, 60L);
+
+        // 10초가 지났다고 보고 확인 → 같은 commandId로 재시도
+        retryService.checkPending(now().plusSeconds(11));
+        await().atMost(Duration.ofSeconds(10)).until(() -> countReceived(commandId) == 2);
+        awaitStatus(SILENT_VENTILATOR, commandId, "SENT");
+
+        // 재시도한 뒤 10초가 더 지났다고 보고 확인 → 시간 초과, 정보 이상
+        retryService.checkPending(now().plusSeconds(22));
+        awaitStatus(SILENT_VENTILATOR, commandId, "TIMEOUT");
+        mockMvc.perform(get("/api/anomalies?status=OPEN"))
+                .andExpect(jsonPath(COMMAND_TIMEOUT_OF.formatted(SILENT_VENTILATOR) + ".severity").value("INFO"));
+
+        // 장비가 다시 연결되어 늦게 적용했다고 응답 → 적용됨 + 늦은 응답, 이상 해결
+        MqttMessage ack = new MqttMessage(("""
+                {"schemaVersion": 1, "commandId": "%s", "result": "APPLIED", "appliedAt": "%s"}
+                """.formatted(commandId, now())).getBytes(StandardCharsets.UTF_8));
+        ack.setQos(QOS_AT_LEAST_ONCE);
+        deviceSide.publish("jabjaje/94/" + SILENT_VENTILATOR + "/command/ack", ack);
+        awaitStatus(SILENT_VENTILATOR, commandId, "APPLIED");
+        mockMvc.perform(get("/api/devices/" + SILENT_VENTILATOR + "/commands"))
+                .andExpect(jsonPath("$[?(@.commandId == '%s')].lateAck".formatted(commandId)).value(true))
+                .andExpect(jsonPath("$[?(@.commandId == '%s')].retryCount".formatted(commandId)).value(1));
+        mockMvc.perform(get("/api/anomalies?status=OPEN"))
+                .andExpect(jsonPath(COMMAND_TIMEOUT_OF.formatted(SILENT_VENTILATOR), org.hamcrest.Matchers.empty()));
+    }
+
+    @Test
+    @DisplayName("시간 초과 뒤 같은 장비의 다음 명령에 정상 응답이 오면 COMMAND_TIMEOUT이 해제된다 (다음 명령 정상)")
+    void nextAnsweredCommandResolvesTimeout() throws Exception {
+        String timedOut = requestBoost(SILENT_VENTILATOR, 250, 600, "SENT");
+        awaitCommand(timedOut);
+        retryService.checkPending(now().plusSeconds(11));
+        retryService.checkPending(now().plusSeconds(22));
+        awaitStatus(SILENT_VENTILATOR, timedOut, "TIMEOUT");
+
+        String next = requestBoost(SILENT_VENTILATOR, 260, 600, "SENT");
+        awaitCommand(next);
+        MqttMessage ack = new MqttMessage(("""
+                {"schemaVersion": 1, "commandId": "%s", "result": "APPLIED", "appliedAt": "%s"}
+                """.formatted(next, now())).getBytes(StandardCharsets.UTF_8));
+        ack.setQos(QOS_AT_LEAST_ONCE);
+        deviceSide.publish("jabjaje/94/" + SILENT_VENTILATOR + "/command/ack", ack);
+
+        awaitStatus(SILENT_VENTILATOR, next, "APPLIED");
+        mockMvc.perform(get("/api/anomalies?status=OPEN"))
+                .andExpect(jsonPath(COMMAND_TIMEOUT_OF.formatted(SILENT_VENTILATOR), org.hamcrest.Matchers.empty()));
+        awaitStatus(SILENT_VENTILATOR, timedOut, "TIMEOUT");
+    }
+
+    @Test
+    @DisplayName("응답을 기다리는 동안 새 부스트를 요청하면 이전 명령은 밀려나고, 밀려난 명령에 응답이 와도 밀려남을 유지한다")
+    void newBoostSupersedesPending() throws Exception {
+        String older = requestBoost(CONNECTED_VENTILATOR, 230, 600, "SENT");
+        awaitCommand(older);
+        String newer = requestBoost(CONNECTED_VENTILATOR, 260, 600, "SENT");
+        awaitCommand(newer);
+        awaitStatus(CONNECTED_VENTILATOR, older, "SUPERSEDED");
+
+        publishAck(CONNECTED_VENTILATOR, """
+                {"schemaVersion": 1, "commandId": "%s", "result": "APPLIED", "appliedAt": "%s"}
+                """.formatted(older, now()));
+        publishAck(CONNECTED_VENTILATOR, """
+                {"schemaVersion": 1, "commandId": "%s", "result": "APPLIED", "appliedAt": "%s"}
+                """.formatted(newer, now()));
+        awaitStatus(CONNECTED_VENTILATOR, newer, "APPLIED");
+        awaitStatus(CONNECTED_VENTILATOR, older, "SUPERSEDED");
+    }
+
+    private long countReceived(String commandId) {
+        return commandIdsReceived().stream().filter(commandId::equals).count();
     }
 
     private String requestBoost(String deviceId, int supplyCmh, int durationSec, String expectedStatus) throws Exception {

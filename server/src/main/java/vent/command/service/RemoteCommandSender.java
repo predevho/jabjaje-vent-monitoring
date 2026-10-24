@@ -15,11 +15,11 @@ import vent.command.domain.type.RemoteCommandType;
 import vent.global.mqtt.MqttClientManager;
 
 /**
- * 원격 명령 발행 (스펙 4.1, 4.2, #8).
+ * 원격 명령 발행 (스펙 4.1, 4.2, 7.2, #8, #9).
  *
- * <p>{@code jabjaje/{현장ID}/{장비ID}/command}에 QoS 1, retained 없이 보낸다. 메시지에는 만료 시각(발행 + 60초)을 넣는다.
- * 장비가 만료를 검사하고 MQTT 5 메시지 만료를 거는 것은 #9에서 한다. 발행이 실패하면 명령은 보냄(SENT)으로 남고,
- * #9의 재시도와 시간 초과가 처리한다.
+ * <p>{@code jabjaje/{현장ID}/{장비ID}/command}에 QoS 1, retained 없이 보낸다. MQTT 5 메시지 만료를 남은 시간만큼 건다.
+ * 만료된 명령은 브로커가 장비에 넘기지 않고 버린다(재시도도 처음 만료 시각을 넘지 않는다). 이미 만료됐으면 보내지 않는다.
+ * 발행이 실패하면 명령은 보냄으로 남고 재시도·시간 초과가 처리한다.
  *
  * @author predevho (AI 보조: Claude)
  * @since 2026-10-24 (#8)
@@ -29,7 +29,6 @@ public class RemoteCommandSender {
 
     private static final Logger log = LoggerFactory.getLogger(RemoteCommandSender.class);
     private static final int SCHEMA_VERSION = 1;
-    private static final Duration EXPIRES_AFTER = Duration.ofSeconds(60);
 
     private final MqttClientManager mqttClientManager;
     private final ObjectMapper objectMapper;
@@ -40,10 +39,16 @@ public class RemoteCommandSender {
     }
 
     public void send(RemoteCommandIssuedEvent event) {
+        long remainingSeconds = Duration.between(OffsetDateTime.now(ZoneOffset.UTC), event.expiresAt()).toSeconds();
+        if (remainingSeconds <= 0) {
+            log.warn("원격 명령이 이미 만료되어 보내지 않음: {} {}", event.deviceId(), event.commandId());
+            return;
+        }
         String topic = "jabjaje/" + event.siteId() + "/" + event.deviceId() + "/command";
         try {
-            mqttClientManager.publish(topic, objectMapper.writeValueAsBytes(message(event)));
-            log.info("원격 명령 보냄: {} {} {}", event.deviceId(), RemoteCommandType.BOOST, event.commandId());
+            mqttClientManager.publish(topic, objectMapper.writeValueAsBytes(message(event)), remainingSeconds);
+            log.info("원격 명령 {}: {} {} {} (만료까지 {}초)", event.retry() ? "재시도" : "보냄", event.deviceId(),
+                    RemoteCommandType.BOOST, event.commandId(), remainingSeconds);
         } catch (MqttException | RuntimeException e) {
             log.error("원격 명령 발행 실패, 보냄 상태로 남음: {} {}", event.deviceId(), event.commandId(), e);
         } catch (JsonProcessingException e) {
@@ -58,8 +63,7 @@ public class RemoteCommandSender {
         message.put("type", RemoteCommandType.BOOST.name());
         message.put("params", event.params());
         message.put("issuedAt", event.issuedAt());
-        // 만료는 발행 시각 기준이다 (스펙 7.1). 요청 시각과는 커밋 시간만큼 차이가 난다.
-        message.put("expiresAt", OffsetDateTime.now(ZoneOffset.UTC).plus(EXPIRES_AFTER));
+        message.put("expiresAt", event.expiresAt());
         return message;
     }
 }

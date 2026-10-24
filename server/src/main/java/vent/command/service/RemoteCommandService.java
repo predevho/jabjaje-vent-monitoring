@@ -16,6 +16,7 @@ import vent.command.repository.RemoteCommandRepository;
 import vent.command.rule.BoostCheckInput;
 import vent.command.rule.BoostCommandPolicy;
 import vent.command.rule.BoostDecision;
+import vent.command.rule.RemoteCommandReliabilityProperties;
 import vent.gateway.domain.Gateway;
 import vent.gateway.repository.GatewayRepository;
 import vent.site.domain.Device;
@@ -42,15 +43,17 @@ public class RemoteCommandService {
     private final GatewayRepository gatewayRepository;
     private final RemoteCommandRepository commandRepository;
     private final BoostCommandPolicy policy;
+    private final RemoteCommandReliabilityProperties reliability;
     private final ApplicationEventPublisher eventPublisher;
 
     public RemoteCommandService(DeviceRepository deviceRepository, GatewayRepository gatewayRepository,
                                 RemoteCommandRepository commandRepository, BoostCommandPolicy policy,
-                                ApplicationEventPublisher eventPublisher) {
+                                RemoteCommandReliabilityProperties reliability, ApplicationEventPublisher eventPublisher) {
         this.deviceRepository = deviceRepository;
         this.gatewayRepository = gatewayRepository;
         this.commandRepository = commandRepository;
         this.policy = policy;
+        this.reliability = reliability;
         this.eventPublisher = eventPublisher;
     }
 
@@ -60,13 +63,14 @@ public class RemoteCommandService {
      * @param deviceId 대상 환기장치 ID
      * @param request  급기와 지속시간
      * @param now      요청 시각
-     * @return 기록한 명령 (보냄 또는 연결이 끊겨 보내지 않음)
+     * @return 기록한 명령 (보냄 또는 게이트웨이가 연결되지 않아 보내지 않음). 보낼 때는 기다리던 이전 명령을 밀어낸다 (#9)
      * @throws NoSuchElementException 없는 장비
      * @throws BoostRequestException  잘못된 요청 (환기장치가 아님, 지원 기능 없음, 기준 밖)
      */
     @Transactional
     public RemoteCommandResponse requestBoost(String deviceId, BoostRequest request, OffsetDateTime now) {
-        Device device = deviceRepository.findById(deviceId).orElseThrow(() -> new NoSuchElementException("없는 장비: " + deviceId));
+        // 장비 행을 잠가 같은 장비의 요청을 한 줄로 세운다(#9). 그래야 동시에 두 요청이 와도 대기 명령이 하나로 남는다.
+        Device device = deviceRepository.findByIdForUpdate(deviceId).orElseThrow(() -> new NoSuchElementException("없는 장비: " + deviceId));
         if (device.getType() != DeviceType.VENTILATOR) {
             throw new BoostRequestException("부스트는 열회수 환기장치에만 보낼 수 있어요");
         }
@@ -84,12 +88,28 @@ public class RemoteCommandService {
                 yield RemoteCommandResponse.from(command);
             }
             case SEND -> {
-                RemoteCommand command = commandRepository.save(RemoteCommand.sentBoost(deviceId, decision.params(), now));
-                eventPublisher.publishEvent(new RemoteCommandIssuedEvent(
-                        command.getId(), device.getSite().getId(), deviceId, decision.params(), now));
+                supersedePending(deviceId);
+                RemoteCommand command = commandRepository.save(RemoteCommand.sentBoost(
+                        deviceId, decision.params(), now, now.plus(reliability.expiresAfter())));
+                eventPublisher.publishEvent(new RemoteCommandIssuedEvent(command.getId(), device.getSite().getId(),
+                        deviceId, decision.params(), now, command.getExpiresAt(), false));
                 yield RemoteCommandResponse.from(command);
             }
         };
+    }
+
+    /**
+     * 장비당 대기 명령은 하나다(ADR-0002). 응답을 기다리던 이전 명령은 새 명령에 밀려난다. 장비에도 이미 보냈을 수 있지만,
+     * 장비는 몰려온 명령 중 가장 최신 것만 적용하므로 괜찮다(스펙 7.2).
+     */
+    private void supersedePending(String deviceId) {
+        for (RemoteCommand pending : commandRepository.findPendingByDeviceIdForUpdate(deviceId)) {
+            pending.markSuperseded();
+            log.info("원격 명령 밀려남: {} {}", deviceId, pending.getId());
+        }
+        // Hibernate는 저장(INSERT)을 상태 변경(UPDATE)보다 먼저 보낸다. 먼저 밀어내 두지 않으면 새 명령이
+        // "장비당 대기 명령 하나" 유니크 인덱스(V10)에 걸린다.
+        commandRepository.flush();
     }
 
     /** 한 장비의 최근 명령 (최근 것부터 5개). */

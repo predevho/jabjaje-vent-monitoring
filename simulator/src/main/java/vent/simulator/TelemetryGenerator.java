@@ -19,7 +19,7 @@ import java.util.UUID;
  * @author predevho (AI 보조: Claude)
  * @since 2026-10-23 (#2)
  */
-public class TelemetryGenerator {
+public class TelemetryGenerator implements RemoteCommandHandler.BoostDevice {
 
     private final String ventilatorId;
     private final int targetAirflowCmh;
@@ -215,6 +215,7 @@ public class TelemetryGenerator {
      *
      * @since 2026-10-24 (#8)
      */
+    @Override
     public Optional<String> boostRejectionReason() {
         if (frostProtection) {
             return Optional.of("FROST_PROTECTION");
@@ -231,6 +232,7 @@ public class TelemetryGenerator {
      *
      * @since 2026-10-24 (#8)
      */
+    @Override
     public void startBoost(int supplyCmh, int exhaustCmh, Duration duration, OffsetDateTime now) {
         boostSupplyCmh = supplyCmh;
         boostExhaustCmh = exhaustCmh;

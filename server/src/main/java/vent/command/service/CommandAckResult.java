@@ -9,7 +9,7 @@ package vent.command.service;
 public enum CommandAckResult {
     /** 명령 상태에 반영했다 (적용됨이든 거절됨이든) */
     RECORDED,
-    /** 이미 끝난 명령의 응답이라 무시했다 (QoS 1 중복) */
+    /** 이미 끝난 명령의 응답이라 무시했다 (QoS 1 중복, 새 명령에 밀린 명령) */
     ALREADY_FINAL,
     /** 모르는 commandId */
     UNKNOWN_COMMAND,

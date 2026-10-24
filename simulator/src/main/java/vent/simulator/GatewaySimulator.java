@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,6 +58,10 @@ public class GatewaySimulator {
     /** 30초 주기로 24시간 분량 */
     private static final int BUFFER_CAPACITY = 2_880;
     private static final int EVENT_BUFFER_CAPACITY = 500;
+    /** 몰려온 원격 명령을 모으는 시간 (#9) */
+    private static final long COMMAND_BATCH_WINDOW_MILLIS = 500;
+    /** 끊긴 동안 브로커가 원격 명령을 보관하도록 세션을 유지하는 시간 (#9). 명령 자체는 60초 뒤 만료된다 */
+    private static final long SESSION_EXPIRY_SECONDS = 60 * 60;
     /** 동기 발행·구독이 브로커 응답을 기다리는 최대 시간 (#8) */
     private static final long PUBLISH_TIMEOUT_MILLIS = 5_000;
     /** online 상태 메시지로 보고하는 버전과 지원 기능 (스펙 4.4, #6) */
@@ -72,6 +77,13 @@ public class GatewaySimulator {
     private final TelemetryBuffer<TelemetryMessage> buffer = new TelemetryBuffer<>(BUFFER_CAPACITY);
     /** 후드 이벤트 버퍼 (#7). 측정값보다 드물어 작게 둔다 */
     private final TelemetryBuffer<DeviceEventMessage> eventBuffer = new TelemetryBuffer<>(EVENT_BUFFER_CAPACITY);
+    /** 원격 명령 응답 버퍼 (#9). 끊긴 동안의 응답도 다시 연결된 뒤 보낸다 */
+    private final TelemetryBuffer<Map<String, Object>> ackBuffer = new TelemetryBuffer<>(EVENT_BUFFER_CAPACITY);
+    /** 원격 명령 처리 (#9). 게이트웨이 스레드에서만 쓴다 */
+    private final RemoteCommandHandler commandHandler = new RemoteCommandHandler();
+    /** 0.5초 동안 모으는 중인 원격 명령 (#9). 게이트웨이 스레드에서만 쓴다 */
+    private final List<byte[]> pendingCommands = new ArrayList<>();
+    private boolean commandBatchScheduled;
     private final ReconnectBackoff backoff = new ReconnectBackoff();
     private final ScheduledExecutorService worker;
     /** 네트워크 끊김 시나리오(#6)가 켜져 있으면 true. 켜져 있는 동안은 다시 연결하지 않는다. 게이트웨이 스레드에서만 쓴다. */
@@ -141,6 +153,9 @@ public class GatewaySimulator {
         // Paho 자동 재연결에는 jitter가 없어 직접 재접속한다.
         options.setAutomaticReconnect(false);
         options.setKeepAliveInterval(KEEP_ALIVE_SECONDS);
+        // 세션을 유지한다(#9). 그래야 끊긴 동안 온 원격 명령을 브로커가 보관했다가 다시 연결될 때 넘겨준다.
+        options.setCleanStart(false);
+        options.setSessionExpiryInterval(SESSION_EXPIRY_SECONDS);
         options.setConnectionTimeout(CONNECTION_TIMEOUT_SECONDS);
         // 게이트웨이별 계정. 브로커 ACL이 이 계정에 자기 현장 토픽만 허용한다 (#13).
         options.setUserName(site.gatewayId());
@@ -199,9 +214,10 @@ public class GatewaySimulator {
         }
     }
 
-    /** 쌓인 이벤트와 측정값을 보낸다. */
+    /** 쌓인 이벤트, 명령 응답, 측정값을 보낸다. */
     private void flush() {
         flush(eventBuffer, eventTopic(), "이벤트");
+        flush(ackBuffer, commandTopic() + "/ack", "명령 응답");
         flush(buffer, topic(), "측정값");
     }
 
@@ -286,55 +302,78 @@ public class GatewaySimulator {
     }
 
     /**
-     * 원격 명령 하나를 처리한다(#8). 장비 우선순위(스펙 7.3)대로 자기 보호 로직(동결 방지), 후드 연동 중이면 거절하고,
-     * 아니면 부스트를 적용한다. 결과를 command/ack로 응답한다. 게이트웨이 스레드에서 부른다.
-     * 만료·중복·몰림 처리는 #9에서 한다.
+     * 원격 명령을 받는다(#8, #9). 다시 연결된 직후에는 끊긴 동안 쌓인 명령이 한꺼번에 오므로, 0.5초 동안 모았다가
+     * 한 묶음으로 처리한다(스펙 7.2 장비는 최신 하나만 적용). 게이트웨이 스레드에서 부른다.
      */
-    private void handleCommand(byte[] payload) {
-        JsonNode command;
-        try {
-            command = JSON.readTree(payload);
-        } catch (java.io.IOException e) {
-            Log.error("[%s] 원격 명령을 해석할 수 없음, 버림: %s", site.gatewayId(), e.getMessage());
-            return;
+    private void receiveCommand(byte[] payload) {
+        pendingCommands.add(payload);
+        if (!commandBatchScheduled) {
+            commandBatchScheduled = true;
+            worker.schedule(this::processCommandBatch, COMMAND_BATCH_WINDOW_MILLIS, TimeUnit.MILLISECONDS);
         }
-        String commandId = command.path("commandId").asText();
-        if (!"BOOST".equals(command.path("type").asText())) {
-            sendAck(commandId, "REJECTED", "UNSUPPORTED");
-            return;
-        }
-        Optional<String> rejection = generator.boostRejectionReason();
-        if (rejection.isPresent()) {
-            Log.info("[%s] 원격 명령 거절: 부스트 (%s)", site.gatewayId(), rejection.get());
-            sendAck(commandId, "REJECTED", rejection.get());
-            return;
-        }
-        JsonNode params = command.path("params");
-        int durationSec = params.path("durationSec").asInt();
-        generator.startBoost(params.path("supplyCmh").asInt(), params.path("exhaustCmh").asInt(),
-                Duration.ofSeconds(durationSec), OffsetDateTime.now(SEOUL));
-        Log.info("[%s] 원격 명령 적용: 부스트 급기 %d / 배기 %d CMH, %d초", site.gatewayId(),
-                params.path("supplyCmh").asInt(), params.path("exhaustCmh").asInt(), durationSec);
-        sendAck(commandId, "APPLIED", null);
     }
 
-    /** 원격 명령 응답을 보낸다. 끊겨 있으면 버린다(끊긴 동안의 응답은 #9에서 다룬다). */
-    private void sendAck(String commandId, String result, String reason) {
-        Map<String, Object> ack = new LinkedHashMap<>();
-        ack.put("schemaVersion", TelemetryMessage.SCHEMA_VERSION);
-        ack.put("commandId", commandId);
-        ack.put("result", result);
-        if (reason != null) {
-            ack.put("reason", reason);
-        } else {
-            ack.put("appliedAt", OffsetDateTime.now(SEOUL));
+    /** 모아 둔 명령을 {@link RemoteCommandHandler}로 처리하고 응답을 보낸다. */
+    private void processCommandBatch() {
+        commandBatchScheduled = false;
+        List<RemoteCommandHandler.Command> batch = new ArrayList<>();
+        for (byte[] payload : pendingCommands) {
+            parseCommand(payload).ifPresent(batch::add);
         }
+        pendingCommands.clear();
+        if (batch.isEmpty()) {
+            return;
+        }
+        List<RemoteCommandHandler.Ack> acks;
         try {
-            MqttMessage message = new MqttMessage(toJson(ack));
-            message.setQos(QOS_AT_LEAST_ONCE);
-            client.publish(commandTopic() + "/ack", message);
-        } catch (MqttException | RuntimeException e) {
-            Log.error("[%s] 원격 명령 응답 실패: %s", site.gatewayId(), e.getMessage());
+            acks = commandHandler.handle(batch, OffsetDateTime.now(SEOUL), generator);
+        } catch (RuntimeException e) {
+            Log.error("[%s] 원격 명령 묶음 처리 실패, 버림 (%d개): %s", site.gatewayId(), batch.size(), e.getMessage());
+            return;
+        }
+        for (RemoteCommandHandler.Ack ack : acks) {
+            Log.info("[%s] 원격 명령 %s: %s%s", site.gatewayId(), ack.result().equals("APPLIED") ? "적용" : "거절",
+                    ack.commandId(), ack.reason() == null ? "" : " (" + ack.reason() + ")");
+            queueAck(ack);
+        }
+        flush(ackBuffer, commandTopic() + "/ack", "명령 응답");
+    }
+
+    private Optional<RemoteCommandHandler.Command> parseCommand(byte[] payload) {
+        try {
+            JsonNode command = JSON.readTree(payload);
+            JsonNode params = command.path("params");
+            return Optional.of(new RemoteCommandHandler.Command(
+                    command.path("commandId").asText(),
+                    command.path("type").asText(),
+                    parseTime(command.path("issuedAt").asText(null)),
+                    parseTime(command.path("expiresAt").asText(null)),
+                    params.path("supplyCmh").asInt(),
+                    params.path("exhaustCmh").asInt(),
+                    params.path("durationSec").asInt()));
+        } catch (java.io.IOException | RuntimeException e) {
+            Log.error("[%s] 원격 명령을 해석할 수 없음, 버림: %s", site.gatewayId(), e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private static OffsetDateTime parseTime(String value) {
+        return value == null ? null : OffsetDateTime.parse(value);
+    }
+
+    /** 응답을 버퍼에 넣는다. 끊겨 있으면 다시 연결된 뒤 보낸다(서버는 시간 초과 뒤 온 응답을 늦은 응답으로 기록, #9). */
+    private void queueAck(RemoteCommandHandler.Ack ack) {
+        Map<String, Object> message = new LinkedHashMap<>();
+        message.put("schemaVersion", TelemetryMessage.SCHEMA_VERSION);
+        message.put("commandId", ack.commandId());
+        message.put("result", ack.result());
+        if (ack.reason() != null) {
+            message.put("reason", ack.reason());
+        } else {
+            message.put("appliedAt", OffsetDateTime.now(SEOUL));
+        }
+        if (ackBuffer.add(message)) {
+            Log.error("[%s] 응답 버퍼가 가득 차 가장 오래된 응답을 버림", site.gatewayId());
         }
     }
 
@@ -361,6 +400,25 @@ public class GatewaySimulator {
         worker.execute(() -> {
             change.accept(generator);
             Log.info("[%s] 시나리오: %s", site.gatewayId(), label);
+        });
+    }
+
+    /**
+     * 조용한 끊김 시나리오(#9): 정상 종료(DISCONNECT)로 끊어 Last Will이 나가지 않고, offline도 보내지 않는다.
+     * 서버는 무수신 검사(2분)가 돌기 전까지 연결됨으로 알고 원격 명령을 보낸다. 브로커는 세션에 명령을 보관했다가
+     * {@link #networkUp()} 때 한꺼번에 넘겨준다(스펙 7.2 "일시 끊김이 감지되기 전에 보낸 명령").
+     *
+     * @since 2026-10-24 (#9)
+     */
+    public void networkSilent() {
+        worker.execute(() -> {
+            networkDown = true;
+            try {
+                client.disconnect();
+            } catch (MqttException e) {
+                Log.error("[%s] 연결 끊기 실패: %s", site.gatewayId(), e.getMessage());
+            }
+            Log.info("[%s] 시나리오: 조용한 끊김 (서버에 알리지 않음, 다시 연결하지 않음)", site.gatewayId());
         });
     }
 
@@ -466,7 +524,7 @@ public class GatewaySimulator {
             // 원격 명령(#8). 생성기는 게이트웨이 스레드에서만 쓰므로 그 스레드에 맡긴다.
             byte[] payload = message.getPayload();
             try {
-                worker.execute(() -> handleCommand(payload));
+                worker.execute(() -> receiveCommand(payload));
             } catch (java.util.concurrent.RejectedExecutionException e) {
                 // 종료 중이라 처리하지 않는다. 예외가 Paho까지 올라가면 연결이 끊긴다.
                 Log.error("[%s] 종료 중이라 원격 명령을 처리하지 않음", site.gatewayId());

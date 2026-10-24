@@ -21,6 +21,9 @@ import vent.command.domain.type.RemoteCommandType;
  * @param sentAt       보낸 시각. 보내지 않았으면 null
  * @param ackedAt      장비 응답 시각. 아직 없으면 null
  * @param notice       화면 안내. 게이트웨이가 연결되지 않아 보내지 않았을 때만 (스펙 7.1)
+ * @param expiresAt    만료 시각 (#9). 보내지 않았으면 null
+ * @param retryCount   재시도 횟수 (#9)
+ * @param lateAck      시간 초과 뒤에 온 응답인지 (#9). 화면에 "늦게 적용됨"으로 보인다
  * @author predevho (AI 보조: Claude)
  * @since 2026-10-24 (#8)
  */
@@ -36,7 +39,10 @@ public record RemoteCommandResponse(
         OffsetDateTime requestedAt,
         OffsetDateTime sentAt,
         OffsetDateTime ackedAt,
-        String notice) {
+        String notice,
+        OffsetDateTime expiresAt,
+        int retryCount,
+        boolean lateAck) {
 
     static final String NOT_CONNECTED_NOTICE = "지금은 게이트웨이가 연결되지 않아 명령을 보낼 수 없어요";
 
@@ -53,6 +59,9 @@ public record RemoteCommandResponse(
                 command.getRequestedAt(),
                 command.getSentAt(),
                 command.getAckedAt(),
-                command.getStatus() == RemoteCommandStatus.REJECTED_OFFLINE ? NOT_CONNECTED_NOTICE : null);
+                command.getStatus() == RemoteCommandStatus.REJECTED_OFFLINE ? NOT_CONNECTED_NOTICE : null,
+                command.getExpiresAt(),
+                command.getRetryCount(),
+                command.isLateAck());
     }
 }

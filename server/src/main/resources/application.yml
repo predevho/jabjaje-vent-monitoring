@@ -58,6 +58,12 @@ vent:
       model-max-airflow-cmh:
         "[DOMEKT R 300V]": 300
         "[DOMEKT R 450V]": 450
+    # 원격 명령 신뢰성 (스펙 7.1·7.2, #9): 10초 응답 없으면 1회 재시도, 그래도 없으면 시간 초과. 발행 뒤 60초면 만료
+    reliability:
+      response-wait: 10s
+      max-retries: 1
+      expires-after: 60s
+      check-interval: 2s
   hood:
     # 후드 연동 판정 (스펙 6.2, #7). HOOD_ON 직전 급기와 60초 뒤 첫 급기를 비교한다.
     interlock:

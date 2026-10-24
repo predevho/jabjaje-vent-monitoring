@@ -143,7 +143,7 @@
 { "schemaVersion": 1, "commandId": "uuid", "result": "APPLIED", "appliedAt": "..." }
 { "schemaVersion": 1, "commandId": "uuid", "result": "REJECTED", "reason": "FROST_PROTECTION" }
 ```
-거절 사유는 장비 우선순위(7.3)를 따른다: `FROST_PROTECTION`(동결 방지), `HOOD_INTERLOCK`(후드 연동 중). 측정값에는 부스트 중인지(`boost`, #8)를 더했다. 없으면 `false`로 본다.
+거절 사유는 장비 우선순위(7.3)를 따른다: `FROST_PROTECTION`(동결 방지), `HOOD_INTERLOCK`(후드 연동 중). 신뢰성 규칙(7.2, #9)에 따른 사유: `EXPIRED`(만료), `SUPERSEDED`(더 최신 명령이 있음), 그 밖에 `UNSUPPORTED`(모르는 종류), `INVALID`(요청 시각 없음). 측정값에는 부스트 중인지(`boost`, #8)를 더했다. 없으면 `false`로 본다.
 
 ### 4.3 신뢰성 규칙
 - **중복**: QoS 1은 최소 한 번 전달이라 중복이 올 수 있다. `messageId`(측정값·이벤트), `commandId`(응답)로 걸러낸다.
@@ -151,7 +151,7 @@
 - **명령 멱등성**: 장비는 최근 처리한 `commandId`를 기억하고, 같은 ID가 다시 오면 다시 적용하지 않고 이전 결과만 응답한다.
 - **명령 만료**: 장비는 `expiresAt`이 지난 명령을 무시한다. 오프라인 동안 쌓인 명령이 몇 시간 뒤에 실행되는 것을 막는다.
 - **자동 복귀**: 부스트는 `durationSec`가 지나면 장비가 스스로 원래대로 돌아간다. 해제 명령이 유실돼도 계속 켜져 있지 않다.
-- **세션 유지**: 서버는 persistent session(clean start = false)과 QoS 1로 구독한다. 서버가 재시작되는 동안 들어온 메시지는 브로커가 보관한다.
+- **세션 유지**: 서버는 persistent session(clean start = false)과 QoS 1로 구독한다. 서버가 재시작되는 동안 들어온 메시지는 브로커가 보관한다. 게이트웨이도 세션을 유지한다(1시간, #9). 그래야 끊긴 동안 온 원격 명령을 브로커가 보관했다가 다시 연결될 때 넘겨준다(만료된 것은 버림).
 - **재접속**: 게이트웨이는 지수 백오프와 무작위 지연(jitter)으로 재접속한다. 브로커가 재시작될 때 모든 장비가 동시에 접속하는 것을 막는다.
 
 ### 4.4 버전 호환
@@ -272,11 +272,13 @@ SERVICE_REQUEST 1──0..1 VERDICT
 | device_id | varchar FK | |
 | type | varchar | `BOOST` (`BOOST_CANCEL`은 아직 없음. 지속시간이 지나면 장비가 스스로 돌아온다) |
 | params | jsonb | `{supplyCmh, exhaustCmh, durationSec}` |
-| status | varchar | `SENT` / `APPLIED` / `REJECTED` / `REJECTED_OFFLINE` (#8). `TIMEOUT` / `SUPERSEDED`는 #9 |
+| status | varchar | `SENT` / `APPLIED` / `REJECTED` / `REJECTED_OFFLINE` (#8), `TIMEOUT` / `SUPERSEDED` (#9, V10) |
 | reject_reason | varchar(40) | 장비가 거절한 이유 |
 | requested_by | varchar | `USER` |
 | requested_at, sent_at, acked_at | timestamptz | 보내지 않았으면 `sent_at`이 비어 있다 |
-| late_ack, expires_at, retry_count | | #9에서 추가 |
+| expires_at | timestamptz | 만료 시각(발행 + 60초). 재시도해도 바뀌지 않는다 (#9) |
+| retry_count, retried_at | int, timestamptz | 재시도 횟수와 마지막 재시도 시각 (#9) |
+| late_ack | boolean | 시간 초과 뒤에 온 응답인지 (#9) |
 
 **service_request** (A/S 신청)
 | 컬럼 | 타입 | 설명 |
@@ -341,7 +343,7 @@ SERVICE_REQUEST 1──0..1 VERDICT
 | `BYPASS_TOO_LONG` | 바이패스 60분 넘게 지속 | 바이패스 꺼짐 | WARN |
 | `GATEWAY_OFFLINE` | 게이트웨이가 오프라인이 됨 (일시 끊김이 30분 넘게 이어짐). 이상은 게이트웨이에 붙음 | 다시 연결 | WARN |
 | `VEMC_NO_RESPONSE` | HOOD_ON 후 60초 안에(측정 시각 기준) 급기가 오르지 않음 | 다음 연동 정상 | WARN |
-| `COMMAND_TIMEOUT` | 원격 명령이 재시도 후에도 응답 없음 | 다음 명령 정상 | INFO |
+| `COMMAND_TIMEOUT` | 원격 명령이 재시도 후에도 응답 없음 | 그 장비가 다시 응답(다음 명령 정상, 또는 시간 초과된 명령의 늦은 응답) | INFO |
 
 - 게이트웨이 연결은 2단계로 다룬다. 2분 무수신 또는 Last Will이면 **일시 끊김**(`INTERRUPTED`)으로 바꾸고 화면에만 표시한다. 30분이 지나면 **오프라인**(`OFFLINE`)으로 바꾸고 이상을 만든다. 가정용 Wi-Fi의 짧은 끊김마다 이상이 쌓이는 것을 막는다. 상태 변경과 이상은 같은 트랜잭션에서 저장한다(ADR-0014).
 - 기준값은 설정 파일에 둔다. 필터 차압 기준은 모델별로 둔다. 실제 기준값은 제조사 매뉴얼로 확인해야 한다.
@@ -392,10 +394,11 @@ SERVICE_REQUEST 1──0..1 VERDICT
 2. 서버가 게이트웨이 상태를 확인한다. `CONNECTED`가 아니면(연결 전, 일시 끊김, 오프라인) 명령을 보내지 않고 `REJECTED_OFFLINE`으로 기록한 뒤 "지금은 게이트웨이가 연결되지 않아 명령을 보낼 수 없어요"로 안내한다(연결 전에도 쓰도록 "끊겨"에서 바꿈, #8).
 3. 서버가 파라미터를 검증한다. 풍량은 모델 최대 풍량 이하, 지속시간은 최대 2시간 이하. 게이트웨이 지원 기능에 BOOST가 있어야 한다(4.4).
    - 구현(#8): 잘못된 요청(환기장치가 아님, BOOST 미지원, 모델 최대 풍량 초과, 지속시간 범위 밖)은 기록하지 않고 400으로 돌려준다. 요청이 맞으면 연결 상태를 본다(2단계). 배기는 급기와 같은 값으로 함께 올린다(7.4).
-4. `command`를 `SENT`로 저장하고 발행한다. `expiresAt`은 발행 후 60초다. 발행은 저장이 커밋된 뒤에 한다. 먼저 발행하고 저장이 실패하면 장비가 서버가 모르는 명령을 적용하기 때문이다(#8).
+4. `command`를 `SENT`로 저장하고 발행한다. `expiresAt`은 발행 후 60초다(구현은 저장 시각 + 60초, 발행은 커밋 직후). 장비당 대기 명령이 하나가 되도록 장비 행을 잠그고, 기다리던 이전 명령은 `SUPERSEDED`로 바꾼다(DB 부분 유니크 인덱스로도 막는다, #9). 발행은 저장이 커밋된 뒤에 한다. 먼저 발행하고 저장이 실패하면 장비가 서버가 모르는 명령을 적용하기 때문이다(#8).
 5. 장비는 만료, 중복, 자기 보호 로직을 확인한 뒤 적용하거나 거절하고 응답한다.
 6. 서버는 응답을 받아 `APPLIED` 또는 `REJECTED`로 바꾼다.
 7. 10초 동안 응답이 없으면 같은 `commandId`로 1회 재시도한다. 그래도 없으면 `TIMEOUT`으로 바꾸고 `COMMAND_TIMEOUT` 이상을 만든다.
+   - 구현(#9): 2초 주기 스케줄러가 확인한다. 재시도는 같은 내용·같은 만료 시각이고, MQTT 메시지 만료는 남은 시간으로 건다. `COMMAND_TIMEOUT`(INFO)은 상태 변경과 같은 트랜잭션에서 열고, 그 장비가 다시 응답하면(늦은 응답 포함) 해제한다.
 
 ### 7.2 명령이 한꺼번에 몰릴 때
 게이트웨이가 연결되지 않으면 서버가 명령을 보내지 않지만, 일시 끊김이 감지되기 전(끊긴 직후 최대 2분)에 보낸 명령은 브로커에 쌓였다가 재연결 때 한꺼번에 도착할 수 있다. 세 곳에서 막는다.
@@ -416,6 +419,12 @@ SERVICE_REQUEST 1──0..1 VERDICT
 **늦은 응답**
 - 서버가 `TIMEOUT`으로 처리한 뒤에 `APPLIED` 응답이 오면, 실제 결과대로 `APPLIED`로 바꾸고 `late_ack = true`로 표시한다.
 - 이때 `COMMAND_TIMEOUT` 이상도 해제한다. 화면에는 "늦게 적용됨"으로 보여준다.
+- 늦은 `REJECTED`도 같은 방식으로 `REJECTED` + `late_ack`로 기록하고 이상을 해제한다(장비가 살아 있다는 뜻, #9). `SUPERSEDED`된 명령의 응답은 무시한다.
+
+**구현(#9)**
+- 장비(시뮬레이터)는 세션을 유지한다(clean start 끔, 1시간). 그래야 끊긴 동안 온 명령을 브로커가 보관했다가 다시 연결될 때 넘겨준다. 메시지 만료(60초)가 지난 명령은 브로커가 버린다.
+- 장비는 명령을 0.5초 동안 모아 한 묶음으로 처리하고, 최근 처리한 commandId 100개를 결과와 함께 기억한다. 끊긴 동안의 응답은 버퍼에 쌓았다가 다시 연결되면 보낸다.
+- 시연: `network-silent`(정상 종료로 끊어 Last Will이 나가지 않음 → 서버는 2분까지 연결됨으로 안다) → 부스트 3번 → `network-up`.
 
 **확장 방향**: 장비가 많아지면 디바이스 섀도(AWS IoT Device Shadow, Azure Device Twin과 같은 개념)로 바꾼다. 서버는 "원하는 상태(desired)"만 저장하고, 장비는 "현재 상태(reported)"를 보고한다. 재연결 시 장비는 최신 desired 상태 하나만 받아 맞춘다.
 
@@ -643,6 +652,7 @@ v1 설계를 통신 안정성, 보안, 제어 안전, 데이터 품질, AI, 운�
 2. 필터 막힘 시나리오 주입 → `FILTER_CLOGGED` 이상
 3. 원격 부스트 → `APPLIED` 확인
 4. 브로커 중지(인터넷 끊김) → 후드 ON → 시뮬레이터 로그에서 급기 상승 확인 → 브로커 재시작 → 끊긴 구간 데이터가 채워짐
+   - 원격 명령 몰림(#9): `network-silent`(서버가 모르는 끊김) → 부스트 여러 번 → `network-up` → 최신 하나만 적용, 서버는 늦게 적용됨
 5. A/S 신청 등록 → AI 소견과 근거 → 검증 결과 → 직원 판정
 
 ## 13. 변경 이력
@@ -669,6 +679,7 @@ v1 설계를 통신 안정성, 보안, 제어 안전, 데이터 품질, AI, 운�
   - A/S 접수 → A/S 신청(`as_ticket` → `service_request`), 1차 진단 → AI 소견(`ai_assessment`), 진단 검토 → 판정(`verdict` 테이블 추가)
   - 숫자 기준 문장에서 "이상"(≥) 대신 "넘게", "도달" 사용
 - v12: #13 반영. 브로커 계정·ACL(최소 권한), 익명 거부, 비밀번호는 시작할 때 환경변수로 생성, 계정 이름 = 클라이언트 ID, TLS·장비별 인증서는 README에 운영 대응으로
+- v14: #9 반영. 재시도(2초 주기, 같은 commandId·만료 시각), 시간 초과와 `COMMAND_TIMEOUT`, 밀려남, 늦은 응답(적용·거절), MQTT 5 메시지 만료(남은 시간), 장비 세션 유지·0.5초 묶음·commandId 기억·응답 버퍼, 조용한 끊김 시나리오, V10
 - v13: #8 반영. 부스트 왕복(커밋 뒤 발행, QoS 1·retained 없음, 적용·거절 응답), 잘못된 요청은 400·기록 안 함, 거절 사유(동결 방지, 후드 연동 중), 측정값 `boost`와 목표 풍량 미달의 부스트 제외, command 테이블은 #8 컬럼만(V9)
 - v11: #7 반영. 후드 연동 확인 기준(직전 값과 60초 뒤 첫 값, 10% 넘게 상승), 확인 보류 조건, `device_event.interlock_result`·`judged_at`(V8)
 - v10: #5 반영. "N분 지속" 판단(이어진 구간, 2분 넘게 비면 끊김), CO2 심각도 올리기, 목표 풍량 미달의 바이패스 제외(부스트는 #8), 최소 환기량 계산과 API 표시, 지속 시간 설정
