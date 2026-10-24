@@ -1,0 +1,19 @@
+# 시연용 짧은 기준 시간 (#14). 운영 기본값(docker-compose.yml)은 그대로 두고 이 파일로 덮어쓴다.
+# @author predevho (AI 보조: Claude)
+# @since 2026-10-24 (#14)
+#
+#   docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d --build
+#
+# 비밀값은 없다. 실제 Claude 키는 저장소 루트의 .env(커밋 안 됨)나 셸 환경변수 ANTHROPIC_API_KEY로만 넘긴다.
+services:
+  app:
+    environment:
+      # 게이트웨이 연결 상태 (#6): 일시 끊김 2분 → 1분, 오프라인 30분 → 3분
+      VENT_GATEWAY_CONNECTION_INTERRUPTED_AFTER: 1m
+      VENT_GATEWAY_CONNECTION_OFFLINE_AFTER: 3m
+      # "N분 지속" 이상 규칙 (#5): CO2 10분, 목표 풍량 미달 30분, 바이패스 60분 → 모두 2분
+      VENT_ANOMALY_CO2HIGH_LASTING: 2m
+      VENT_ANOMALY_AIRFLOWBELOWTARGET_LASTING: 2m
+      VENT_ANOMALY_BYPASSTOOLONG_LASTING: 2m
+      # AI 상황 요약 기간 (#10): 7일 → 15분 (막 띄운 시연에는 데이터가 몇 분뿐이라 7일이면 데이터 부족으로 판단 보류)
+      VENT_ASSESSMENT_WINDOW: 15m

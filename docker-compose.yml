@@ -51,24 +51,24 @@ services:
       VENT_MQTT_PASSWORD: ${MQTT_PASSWORD_VENT_SERVER:-vent-server-demo}
       # 시연용 현장 3곳 시드 데이터를 넣는다 (ADR-0011)
       SPRING_PROFILES_ACTIVE: demo
-      # 게이트웨이 연결 기준 (#6). 시연 때는 짧게: VENT_GATEWAY_OFFLINE_AFTER=3m docker compose up -d
+      # 게이트웨이 연결 기준 (#6). 시연값(짧은 기준 시간)은 docker-compose.demo.yml에 모아 두었다 (#14)
       VENT_GATEWAY_CONNECTION_INTERRUPTED_AFTER: ${VENT_GATEWAY_INTERRUPTED_AFTER:-2m}
       VENT_GATEWAY_CONNECTION_OFFLINE_AFTER: ${VENT_GATEWAY_OFFLINE_AFTER:-30m}
-      # "N분 지속" 이상 규칙 (#5). 시연 때는 짧게: VENT_CO2_LASTING=2m VENT_AIRFLOW_LASTING=2m VENT_BYPASS_LASTING=2m
+      # "N분 지속" 이상 규칙 (#5). 시연값은 docker-compose.demo.yml
       VENT_ANOMALY_CO2HIGH_LASTING: ${VENT_CO2_LASTING:-10m}
       VENT_ANOMALY_AIRFLOWBELOWTARGET_LASTING: ${VENT_AIRFLOW_LASTING:-30m}
       VENT_ANOMALY_BYPASSTOOLONG_LASTING: ${VENT_BYPASS_LASTING:-60m}
       # A/S 신청 AI 소견 (#10). 상황 요약 기간은 7일이지만, 막 띄운 시연에는 데이터가 몇 분뿐이라 데이터 부족으로 판단을
-      # 보류한다. 시연 때는 짧게: VENT_ASSESSMENT_WINDOW=15m docker compose up -d
+      # 보류한다. 시연값(15분)은 docker-compose.demo.yml
       VENT_ASSESSMENT_WINDOW: ${VENT_ASSESSMENT_WINDOW:-7d}
-      # 실제 Claude (#12): 내 컴퓨터의 ANTHROPIC_API_KEY를 넘긴다(키를 이 파일에 적지 않는다). 없으면 가짜 AI.
-      # 시연 중 인터넷이 안 되면: VENT_ASSESSMENT_CLIENT=fake docker compose up -d
+      # 실제 Claude (#12): 저장소 루트 .env(커밋 안 됨)나 셸의 ANTHROPIC_API_KEY를 넘긴다(키를 이 파일에 적지 않는다). 없으면 가짜 AI.
+      # 시연 중 인터넷이 안 되면: VENT_ASSESSMENT_CLIENT=fake docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       VENT_ASSESSMENT_CLIENT: ${VENT_ASSESSMENT_CLIENT:-auto}
       VENT_ASSESSMENT_CLAUDE_MODEL: ${VENT_ASSESSMENT_MODEL:-claude-opus-5-5}
       VENT_ASSESSMENT_CLAUDE_RETRYMODEL: ${VENT_ASSESSMENT_RETRY_MODEL:-claude-opus-5-5}
       VENT_ASSESSMENT_CLAUDE_EFFORT: ${VENT_ASSESSMENT_EFFORT:-medium}
-      # 가짜 AI 응답 방식. 검증 실패 시연: VENT_ASSESSMENT_FAKE_MODE=bad-part docker compose up -d
+      # 가짜 AI 응답 방식. 검증 실패 시연: VENT_ASSESSMENT_FAKE_MODE=bad-part docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d
       VENT_ASSESSMENT_FAKE_MODE: ${VENT_ASSESSMENT_FAKE_MODE:-normal}
     ports:
       - "8080:8080"

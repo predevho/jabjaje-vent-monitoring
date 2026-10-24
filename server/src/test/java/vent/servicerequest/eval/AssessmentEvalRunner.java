@@ -113,12 +113,21 @@ public final class AssessmentEvalRunner {
 
         String report = report(label, clientName, model, retryModel, effort, repeats, runs);
         Files.createDirectories(outDir);
-        Path file = outDir.resolve(LocalDate.now(ZoneId.of("Asia/Seoul")) + "-" + label + ".md");
+        Path file = reportFile(outDir, LocalDate.now(ZoneId.of("Asia/Seoul")) + "-" + label);
         Files.writeString(file, report, StandardCharsets.UTF_8);
         System.out.println();
         System.out.println(summaryLine(label, clientName.equals("fake") ? "가짜 AI" : model + " → " + retryModel,
                 clientName.equals("fake") ? "-" : effort, runs));
         System.out.println("보고서: " + file);
+    }
+
+    /** 같은 날 같은 구성을 다시 돌려도 앞 보고서를 덮어쓰지 않도록 -2, -3 …을 붙인다(답이 흔들리는 기록도 남긴다). */
+    private static Path reportFile(Path outDir, String name) {
+        Path file = outDir.resolve(name + ".md");
+        for (int n = 2; Files.exists(file); n++) {
+            file = outDir.resolve(name + "-" + n + ".md");
+        }
+        return file;
     }
 
     /** 운영과 같은 순서: 입력 만들기 → AI → 검증, 실패하면 재시도 모델로 한 번 더. */
@@ -210,10 +219,11 @@ public final class AssessmentEvalRunner {
                     .append(" | ").append(String.format("%.1f초", list.stream().mapToLong(Run::millis).average().orElse(0) / 1000))
                     .append(" |\n");
         });
-        List<Run> failures = runs.stream().filter(r -> !r.correct()).toList();
-        if (!failures.isEmpty()) {
+        // 결국 맞았어도 재시도한 실행은 첫 시도에서 걸린 이유를 남긴다(검증기가 실제로 잡은 사례)
+        List<Run> flaggedRuns = runs.stream().filter(r -> !r.correct() || r.retried()).toList();
+        if (!flaggedRuns.isEmpty()) {
             md.append("\n## 틀리거나 검증에 걸린 실행\n\n");
-            failures.forEach(r -> md.append("- ").append(r.id()).append(": 1순위 ").append(r.category())
+            flaggedRuns.forEach(r -> md.append("- ").append(r.id()).append(": 1순위 ").append(r.category())
                     .append(", 시도 ").append(r.attempts()).append("번 (").append(String.join(" → ", r.models())).append(")")
                     .append(r.errors().isEmpty() ? "" : " · " + String.join(" / ", r.errors())).append("\n"));
         }
@@ -226,7 +236,7 @@ public final class AssessmentEvalRunner {
         return String.format("- 1순위 원인 정답률: **%d/%d** (%.0f%%)%n- 검증 통과율: %d/%d%n- 재시도한 실행: %d%n"
                         + "- 응답 시간: 평균 %.1f초, 최대 %.1f초%n- 토큰: 입력 %,d · 출력 %,d · 캐시 읽기 %,d · 캐시 쓰기 %,d%n- 추정 비용: %s",
                 count(runs, Run::correct), runs.size(), 100.0 * count(runs, Run::correct) / runs.size(),
-                count(runs, Run::passed), runs.size(), runs.stream().filter(r -> r.attempts() > 1).count(),
+                count(runs, Run::passed), runs.size(), runs.stream().filter(Run::retried).count(),
                 runs.stream().mapToLong(Run::millis).average().orElse(0) / 1000,
                 runs.stream().mapToLong(Run::millis).max().orElse(0) / 1000.0,
                 usage.inputTokens(), usage.outputTokens(), usage.cacheReadTokens(), usage.cacheWriteTokens(), cost);
@@ -306,5 +316,10 @@ public final class AssessmentEvalRunner {
     private record Run(String id, String scenario, List<String> expected, String category, boolean passed, boolean correct,
                        int attempts, long millis, AssessmentUsage usage, Double cost, List<String> models,
                        List<String> errors) {
+
+        /** 첫 시도가 통과하지 못해 다시 시도했는가. */
+        boolean retried() {
+            return attempts > 1;
+        }
     }
 }
