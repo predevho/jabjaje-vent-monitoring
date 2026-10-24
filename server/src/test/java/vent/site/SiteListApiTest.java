@@ -11,6 +11,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -30,6 +31,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @AutoConfigureMockMvc
 @Testcontainers
 @ActiveProfiles("demo")
+// 이 테스트는 MQTT가 필요 없다. 켜 두면 로컬에서 실행 중인 브로커에 같은 클라이언트 ID로 붙어 시연 서버를 끊을 수 있다.
+@TestPropertySource(properties = "vent.mqtt.enabled=false")
 class SiteListApiTest {
 
     @Container

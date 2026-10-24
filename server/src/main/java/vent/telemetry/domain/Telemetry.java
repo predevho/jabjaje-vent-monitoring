@@ -2,10 +2,13 @@ package vent.telemetry.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
+import vent.telemetry.domain.type.TelemetryQuality;
 
 /**
  * 측정값 엔티티 ({@code telemetry} 테이블).
@@ -47,7 +50,20 @@ public class Telemetry {
 
     private boolean bypass;
 
+    @Enumerated(EnumType.STRING)
+    private TelemetryQuality quality;
+
+    private boolean late;
+
     protected Telemetry() {
+    }
+
+    public TelemetryQuality getQuality() {
+        return quality;
+    }
+
+    public boolean isLate() {
+        return late;
     }
 
     public Long getId() {

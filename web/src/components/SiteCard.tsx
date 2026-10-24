@@ -9,6 +9,7 @@
  */
 import type { Device, Site } from '../types/site.ts'
 import type { Telemetry } from '../types/telemetry.ts'
+import Co2Chart from './Co2Chart.tsx'
 import ConnectionBadge from './ConnectionBadge.tsx'
 
 const TIME_FORMAT = new Intl.DateTimeFormat('ko-KR', {
@@ -25,9 +26,11 @@ interface Props {
   ventilator: Device | undefined
   /** 그 환기장치의 최신 측정값. 아직 없으면 undefined */
   telemetry: Telemetry | undefined
+  /** 그 환기장치의 최근 측정값 (그래프용, #3) */
+  recentTelemetry: Telemetry[]
 }
 
-export default function SiteCard({ site, ventilator, telemetry }: Props) {
+export default function SiteCard({ site, ventilator, telemetry, recentTelemetry }: Props) {
   const targetLabel = site.targetAirflowSource === 'TAB' ? 'TAB' : '최소 환기량'
 
   return (
@@ -77,6 +80,7 @@ export default function SiteCard({ site, ventilator, telemetry }: Props) {
       ) : (
         <p className="muted">아직 받은 측정값이 없어요.</p>
       )}
+      {telemetry && <Co2Chart recentTelemetry={recentTelemetry} />}
     </section>
   )
 }

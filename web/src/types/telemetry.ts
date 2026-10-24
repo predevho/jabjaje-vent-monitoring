@@ -6,6 +6,10 @@
  * @author predevho (AI 보조: Claude)
  * @since 2026-10-23 (#2)
  */
+
+/** 측정값 품질: 정상, 범위 밖, 시계 오차 (#3) */
+export type TelemetryQuality = 'OK' | 'OUT_OF_RANGE' | 'CLOCK_SKEW'
+
 export interface Telemetry {
   deviceId: string
   messageId: string
@@ -20,4 +24,7 @@ export interface Telemetry {
   exhaustCmh: number
   filterPa: number
   bypass: boolean
+  quality: TelemetryQuality
+  /** 연결이 끊긴 동안 모아 두었다가 나중에 받은 늦은 측정값인지 (#3) */
+  late: boolean
 }

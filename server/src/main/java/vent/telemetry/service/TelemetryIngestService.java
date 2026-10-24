@@ -24,10 +24,13 @@ public class TelemetryIngestService {
 
     private final DeviceRepository deviceRepository;
     private final TelemetryRepository telemetryRepository;
+    private final TelemetryQualityClassifier qualityClassifier;
 
-    public TelemetryIngestService(DeviceRepository deviceRepository, TelemetryRepository telemetryRepository) {
+    public TelemetryIngestService(DeviceRepository deviceRepository, TelemetryRepository telemetryRepository,
+                                  TelemetryQualityClassifier qualityClassifier) {
         this.deviceRepository = deviceRepository;
         this.telemetryRepository = telemetryRepository;
+        this.qualityClassifier = qualityClassifier;
     }
 
     /**
@@ -56,7 +59,10 @@ public class TelemetryIngestService {
             return TelemetryIngestResult.SITE_MISMATCH;
         }
 
-        int inserted = telemetryRepository.insertIgnoringDuplicate(toInsertParams(topicDeviceId, message, receivedAt));
+        // 범위 밖, 시계 오차 측정값도 버리지 않고 표시해서 저장한다. 판단에서만 뺀다 (스펙 5.2).
+        TelemetryClassification classification = qualityClassifier.classify(message, receivedAt);
+        int inserted = telemetryRepository.insertIgnoringDuplicate(
+                toInsertParams(topicDeviceId, message, receivedAt, classification));
         if (inserted == 0) {
             return TelemetryIngestResult.DUPLICATE;
         }
@@ -65,7 +71,8 @@ public class TelemetryIngestService {
     }
 
     /** 메시지에서 저장할 값을 만든다. 측정값 필드를 옮겨 담는 곳은 여기 한 곳뿐이다. */
-    private static TelemetryInsertParams toInsertParams(String deviceId, TelemetryMessage message, OffsetDateTime receivedAt) {
+    private static TelemetryInsertParams toInsertParams(String deviceId, TelemetryMessage message,
+                                                        OffsetDateTime receivedAt, TelemetryClassification classification) {
         return new TelemetryInsertParams(
                 deviceId,
                 message.messageId(),
@@ -77,6 +84,8 @@ public class TelemetryIngestService {
                 message.supplyCmh(),
                 message.exhaustCmh(),
                 message.filterPa(),
-                message.bypass());
+                message.bypass(),
+                classification.quality().name(),
+                classification.late());
     }
 }

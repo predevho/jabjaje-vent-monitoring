@@ -4,11 +4,12 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 import vent.telemetry.domain.Telemetry;
+import vent.telemetry.domain.type.TelemetryQuality;
 
 /**
  * 측정값 응답.
  *
- * <p>측정값 한 건과 그 측정 시각, 수신 시각.
+ * <p>측정값 한 건과 그 측정 시각, 수신 시각, 품질, 늦은 측정값 여부.
  *
  * @author predevho (AI 보조: Claude)
  * @since 2026-10-23 (#2)
@@ -24,7 +25,9 @@ public record TelemetryResponse(
         int supplyCmh,
         int exhaustCmh,
         int filterPa,
-        boolean bypass) {
+        boolean bypass,
+        TelemetryQuality quality,
+        boolean late) {
 
     public static TelemetryResponse from(Telemetry telemetry) {
         return new TelemetryResponse(
@@ -38,6 +41,8 @@ public record TelemetryResponse(
                 telemetry.getSupplyCmh(),
                 telemetry.getExhaustCmh(),
                 telemetry.getFilterPa(),
-                telemetry.isBypass());
+                telemetry.isBypass(),
+                telemetry.getQuality(),
+                telemetry.isLate());
     }
 }

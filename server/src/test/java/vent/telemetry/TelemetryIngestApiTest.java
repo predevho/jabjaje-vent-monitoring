@@ -1,6 +1,8 @@
 package vent.telemetry;
 
 import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
@@ -11,7 +13,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.eclipse.paho.mqttv5.client.MqttClient;
 import org.eclipse.paho.mqttv5.client.MqttConnectionOptions;
 import org.eclipse.paho.mqttv5.client.persist.MemoryPersistence;
@@ -25,7 +34,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -34,6 +46,8 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import vent.global.mqtt.MqttClientManager;
+import vent.telemetry.dto.request.TelemetryMessage;
+import vent.telemetry.service.TelemetryIngestService;
 
 /**
  * 측정값 수신 통합 테스트.
@@ -64,6 +78,8 @@ class TelemetryIngestApiTest {
     @DynamicPropertySource
     static void mqttProperties(DynamicPropertyRegistry registry) {
         registry.add("vent.mqtt.server-uri", TelemetryIngestApiTest::brokerUri);
+        // 로컬에서 실행 중인 시연 서버(vent-server)와 겹치지 않는 클라이언트 ID
+        registry.add("vent.mqtt.client-id", () -> "vent-server-test-" + UUID.randomUUID());
     }
 
     static MqttClient gateway;
@@ -73,6 +89,10 @@ class TelemetryIngestApiTest {
 
     @Autowired
     MqttClientManager mqttClientManager;
+
+    /** DB 장애를 흉내 내려고 실제 서비스를 감싼다. 끼워 넣지 않은 호출은 실제 메서드로 간다. 테스트마다 초기화된다. */
+    @MockitoSpyBean
+    TelemetryIngestService ingestService;
 
     /** 서버가 구독을 마치기 전에 보낸 메시지는 사라지므로, 구독이 끝날 때까지 기다린 뒤 보낸다. */
     @BeforeEach
@@ -96,7 +116,8 @@ class TelemetryIngestApiTest {
     @DisplayName("측정값을 보내면 장비의 최신 측정값으로 조회되고, 측정 시각과 수신 시각이 모두 있다")
     void storedTelemetryAppearsAsLatest() throws Exception {
         String messageId = UUID.randomUUID().toString();
-        publish("3", "vent-s3", telemetryJson(messageId, "vent-s3", ""));
+        OffsetDateTime measuredAt = now();
+        publish("3", "vent-s3", telemetryJson(messageId, "vent-s3", measuredAt, 820, ""));
 
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> mockMvc.perform(get("/api/telemetry/latest"))
                 .andExpect(status().isOk())
@@ -105,8 +126,50 @@ class TelemetryIngestApiTest {
                 .andExpect(jsonPath("$[?(@.deviceId == 'vent-s3')].supplyCmh", contains(205)))
                 .andExpect(jsonPath("$[?(@.deviceId == 'vent-s3')].filterPa", contains(85)))
                 .andExpect(jsonPath("$[?(@.deviceId == 'vent-s3')].bypass", contains(false)))
-                .andExpect(jsonPath("$[?(@.deviceId == 'vent-s3')].measuredAt", contains("2026-10-24T01:00:00Z")))
-                .andExpect(jsonPath("$[?(@.deviceId == 'vent-s3')].receivedAt").isNotEmpty()));
+                // toString()은 0초를 생략해(06:13Z) JSON(06:13:00Z)과 달라지므로 ISO 형식으로 비교한다.
+                .andExpect(jsonPath("$[?(@.deviceId == 'vent-s3')].measuredAt",
+                        contains(measuredAt.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))))
+                .andExpect(jsonPath("$[?(@.deviceId == 'vent-s3')].receivedAt").isNotEmpty())
+                .andExpect(jsonPath("$[?(@.deviceId == 'vent-s3')].quality", contains("OK")))
+                .andExpect(jsonPath("$[?(@.deviceId == 'vent-s3')].late", contains(false))));
+    }
+
+    @Test
+    @DisplayName("측정 후 2분 넘게 지나서 받은 측정값은 늦은 측정값으로 저장된다")
+    void lateTelemetryIsMarkedLate() throws Exception {
+        String messageId = UUID.randomUUID().toString();
+        publish("1", "vent-s1", telemetryJson(messageId, "vent-s1", now().minusMinutes(5), 820, ""));
+
+        awaitStored("vent-s1", messageId);
+        mockMvc.perform(get("/api/devices/vent-s1/telemetry"))
+                .andExpect(jsonPath("$[?(@.messageId == '" + messageId + "')].late", contains(true)))
+                .andExpect(jsonPath("$[?(@.messageId == '" + messageId + "')].quality", contains("OK")));
+    }
+
+    @Test
+    @DisplayName("범위 밖 값(CO2 0ppm)은 저장되지만 OUT_OF_RANGE로 표시된다")
+    void outOfRangeTelemetryIsMarked() throws Exception {
+        String messageId = UUID.randomUUID().toString();
+        publish("1", "vent-s1", telemetryJson(messageId, "vent-s1", now(), 0, ""));
+
+        awaitStored("vent-s1", messageId);
+        mockMvc.perform(get("/api/devices/vent-s1/telemetry"))
+                .andExpect(jsonPath("$[?(@.messageId == '" + messageId + "')].quality", contains("OUT_OF_RANGE")));
+    }
+
+    @Test
+    @DisplayName("최신 측정값 조회는 시계 오차 측정값을 건너뛰고 품질이 OK인 것 중 가장 최근 것을 돌려준다")
+    void latestSkipsClockSkewedTelemetry() throws Exception {
+        String okId = UUID.randomUUID().toString();
+        String skewedId = UUID.randomUUID().toString();
+        publish("2", "vent-s2", telemetryJson(okId, "vent-s2", now().plusMinutes(1), 820, ""));
+        publish("2", "vent-s2", telemetryJson(skewedId, "vent-s2", now().plusMinutes(30), 820, ""));
+
+        awaitStored("vent-s2", skewedId);
+        mockMvc.perform(get("/api/devices/vent-s2/telemetry"))
+                .andExpect(jsonPath("$[?(@.messageId == '" + skewedId + "')].quality", contains("CLOCK_SKEW")));
+        mockMvc.perform(get("/api/telemetry/latest"))
+                .andExpect(jsonPath("$[?(@.deviceId == 'vent-s2')].messageId", contains(okId)));
     }
 
     @Test
@@ -148,6 +211,74 @@ class TelemetryIngestApiTest {
         awaitStored("vent-s1", messageId);
     }
 
+    @Test
+    @DisplayName("DB가 잠깐 죽은 동안 온 측정값 여러 개는 수신 확인 없이 남았다가, DB가 살아난 뒤 다시 받아 모두 저장된다")
+    void telemetryDuringDbOutageIsNotLost() throws Exception {
+        List<UUID> ids = List.of(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+        AtomicBoolean dbDown = new AtomicBoolean(true);
+        AtomicInteger failures = new AtomicInteger();
+        doAnswer(invocation -> {
+            TelemetryMessage message = invocation.getArgument(2);
+            if (dbDown.get() && ids.contains(message.messageId())) {
+                failures.incrementAndGet();
+                throw new DataAccessResourceFailureException("DB 연결 실패 (테스트에서 끼워 넣음)");
+            }
+            return invocation.callRealMethod();
+        }).when(ingestService).ingest(any(), any(), any(), any());
+
+        // 최신값 테스트(vent-s3)와 겹치지 않도록 목록으로 확인하는 장비(vent-s1)를 쓴다.
+        for (UUID id : ids) {
+            publish("1", "vent-s1", telemetryJson(id.toString(), "vent-s1", ""));
+        }
+        await().atMost(Duration.ofSeconds(10)).until(() -> failures.get() >= ids.size());
+        dbDown.set(false);
+
+        // 서버가 다시 연결하면 브로커가 확인 응답을 못 받은 메시지를 모두 다시 보낸다.
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() ->
+                mockMvc.perform(get("/api/devices/vent-s1/telemetry"))
+                        .andExpect(jsonPath("$[*].messageId", hasItem(ids.get(0).toString())))
+                        .andExpect(jsonPath("$[*].messageId", hasItem(ids.get(1).toString())))
+                        .andExpect(jsonPath("$[*].messageId", hasItem(ids.get(2).toString()))));
+    }
+
+    @Test
+    @DisplayName("다시 해도 안 되는 DB 오류(무결성 위반)는 다시 받지 않고 버린다. 그래야 같은 메시지가 끝없이 돌아오지 않는다")
+    void permanentDbErrorIsNotRetried() throws Exception {
+        UUID targetId = UUID.randomUUID();
+        String sentinelId = UUID.randomUUID().toString();
+        AtomicInteger attempts = new AtomicInteger();
+        doAnswer(invocation -> {
+            TelemetryMessage message = invocation.getArgument(2);
+            if (targetId.equals(message.messageId())) {
+                attempts.incrementAndGet();
+                throw new DataIntegrityViolationException("무결성 위반 (테스트에서 끼워 넣음)");
+            }
+            return invocation.callRealMethod();
+        }).when(ingestService).ingest(any(), any(), any(), any());
+
+        publish("1", "vent-s1", telemetryJson(targetId.toString(), "vent-s1", ""));
+        publish("1", "vent-s1", telemetryJson(sentinelId, "vent-s1", ""));
+        awaitStored("vent-s1", sentinelId);
+
+        // 다시 받는다면 재연결 대기(5초) 뒤에 다시 시도된다. 그보다 길게 지켜봐도 한 번뿐이어야 한다.
+        await().during(Duration.ofSeconds(8)).atMost(Duration.ofSeconds(12)).until(() -> attempts.get() == 1);
+    }
+
+    @Test
+    @DisplayName("센서 고장값(습도 65535%)도 DB 오류 없이 OUT_OF_RANGE로 저장된다")
+    void sensorFaultValueIsStoredAsOutOfRange() throws Exception {
+        String messageId = UUID.randomUUID().toString();
+        publish("1", "vent-s1", """
+                {"schemaVersion": 1, "messageId": "%s", "deviceId": "vent-s1", "measuredAt": "%s",
+                 "co2Ppm": 820, "tempC": 23.4, "humidityPct": 65535,
+                 "supplyCmh": 205, "exhaustCmh": 200, "filterPa": 85, "bypass": false}
+                """.formatted(messageId, now()));
+
+        awaitStored("vent-s1", messageId);
+        mockMvc.perform(get("/api/devices/vent-s1/telemetry"))
+                .andExpect(jsonPath("$[?(@.messageId == '" + messageId + "')].quality", contains("OUT_OF_RANGE")));
+    }
+
     private void awaitStored(String deviceId, String messageId) {
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
                 mockMvc.perform(get("/api/devices/" + deviceId + "/telemetry"))
@@ -161,14 +292,25 @@ class TelemetryIngestApiTest {
         gateway.publish("jabjaje/" + siteId + "/" + deviceId + "/telemetry", message);
     }
 
-    /** 스펙 4.2의 측정값 예시와 같은 값. extraFields는 앞에 끼워 넣을 추가 필드다. */
+    /** 지금 측정한 정상 측정값. extraFields는 앞에 끼워 넣을 추가 필드다. */
     private static String telemetryJson(String messageId, String deviceId, String extraFields) {
+        return telemetryJson(messageId, deviceId, now(), 820, extraFields);
+    }
+
+    /** 스펙 4.2의 측정값 예시와 같은 값에 측정 시각과 CO2만 바꾼다. */
+    private static String telemetryJson(String messageId, String deviceId, OffsetDateTime measuredAt,
+                                        int co2Ppm, String extraFields) {
         return """
                 {%s"schemaVersion": 1, "messageId": "%s", "deviceId": "%s",
-                 "measuredAt": "2026-10-24T10:00:00+09:00",
-                 "co2Ppm": 820, "tempC": 23.4, "humidityPct": 48,
+                 "measuredAt": "%s",
+                 "co2Ppm": %d, "tempC": 23.4, "humidityPct": 48,
                  "supplyCmh": 205, "exhaustCmh": 200, "filterPa": 85, "bypass": false}
-                """.formatted(extraFields, messageId, deviceId);
+                """.formatted(extraFields, messageId, deviceId, measuredAt, co2Ppm);
+    }
+
+    /** 초 단위로 자른 지금 시각(UTC). 응답과 문자열로 비교하기 쉽게 자른다. */
+    private static OffsetDateTime now() {
+        return OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS);
     }
 
     private static String brokerUri() {

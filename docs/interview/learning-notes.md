@@ -183,3 +183,15 @@
   - MQTT는 받는 대상이 토픽 구독자 전체, 상대가 꺼져 있어도 세션이 있으면 브로커가 보관, QoS·keepalive·Last Will이 기본 기능
   - 패킷: CONNECT/CONNACK, PUBLISH/PUBACK, SUBSCRIBE/SUBACK, PINGREQ/PINGRESP, DISCONNECT
   - 우리 구조: 위로(측정값, #2) + 아래로(명령, #8)를 게이트웨이 연결 하나로. 화면은 HTTP 폴링
+
+## #3 구현에서 배운 것
+- **수동 확인 응답(manual ack)**: 처리가 끝난 뒤에만 PUBACK. MQTT는 확인 못 받은 메시지를 재연결 때만 다시 보내므로, 잠깐의 실패는 일부러 재연결한다
+- **잠깐의 실패 vs 영구 실패**: 다시 하면 될 수 있는 것(DB 연결 실패)만 재시도, 다시 해도 같은 것(형식 오류, 무결성 위반)은 버린다. 구분을 잘못하면 같은 메시지가 끝없이 돌아온다(**poison message**)
+- **Spring 예외 계층**: `TransientDataAccessException`(일시), `DataAccessResourceFailureException`(연결 실패), `DataIntegrityViolationException`(무결성 위반, 영구)
+- **지수 백오프 + jitter**: 1초→2초→4초… 기준 최대 60초, ±30% 흔들기. 흔들지 않으면 모든 장비가 같은 순간에 몰린다
+- **원형 버퍼**: 크기를 정해 두고 넘치면 가장 오래된 것부터 버린다. 보낸 뒤 PUBACK을 받아야 지운다
+- **센서 고장값과 컬럼 크기**: 범위 밖 값도 저장하려면 컬럼이 그 값을 담을 수 있어야 한다. NUMERIC(4,1)은 999.9까지
+- **테스트 격리**: 테스트가 로컬에서 실행 중인 브로커에 같은 클라이언트 ID로 붙으면 시연 서버를 끊는다. MQTT가 필요 없는 테스트는 끄고, 필요한 테스트는 ID를 매번 다르게
+- **`OffsetDateTime.toString()` 함정**: 0초면 초를 생략한다(06:13Z). 비교할 때는 `ISO_OFFSET_DATE_TIME`으로 포맷한다
+- **`@MockitoSpyBean`**: 실제 빈을 감싸서 특정 호출에만 장애를 끼워 넣는다
+- **Awaitility `during()`**: "일정 시간 동안 계속 조건이 유지되는지"로 "일어나지 않음"을 확인한다

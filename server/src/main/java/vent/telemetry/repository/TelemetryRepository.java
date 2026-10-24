@@ -16,10 +16,14 @@ import vent.telemetry.domain.Telemetry;
  */
 public interface TelemetryRepository extends JpaRepository<Telemetry, Long>, TelemetryInsertRepository {
 
-    /** 장비마다 측정 시각이 가장 늦은 측정값 하나씩 가져온다 (PostgreSQL DISTINCT ON). */
+    /**
+     * 장비마다 품질이 OK인 측정값 중 측정 시각이 가장 늦은 것 하나씩 가져온다 (PostgreSQL DISTINCT ON).
+     * 시계가 틀린 장비의 미래 시각 측정값이 계속 최신값으로 남지 않도록 OK만 본다 (스펙 9.1 C16).
+     */
     @Query(value = """
             SELECT DISTINCT ON (device_id) *
             FROM telemetry
+            WHERE quality = 'OK'
             ORDER BY device_id, measured_at DESC
             """, nativeQuery = true)
     List<Telemetry> findLatestPerDevice();

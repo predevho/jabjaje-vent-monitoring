@@ -20,6 +20,16 @@ spring:
       hibernate.timezone.default_storage: NORMALIZE_UTC
 
 vent:
+  telemetry:
+    # 측정값 품질 판정 기준 (스펙 5.2, #3)
+    quality:
+      late-threshold: 2m
+      clock-skew-tolerance: 5m
+      co2-ppm: { min: 1, max: 10000 }
+      temp-c: { min: -40, max: 60 }
+      humidity-pct: { min: 0, max: 100 }
+      airflow-cmh: { min: 0, max: 2000 }
+      filter-pa: { min: 0, max: 2000 }
   mqtt:
     # Docker Compose overrides this with the broker's service name.
     server-uri: tcp://localhost:1883

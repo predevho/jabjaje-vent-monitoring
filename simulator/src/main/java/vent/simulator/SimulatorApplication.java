@@ -2,9 +2,6 @@ package vent.simulator;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 /**
  * 가상 게이트웨이(시뮬레이터)의 진입점.
@@ -31,22 +28,14 @@ public final class SimulatorApplication {
         String brokerUri = env("MQTT_URI", "tcp://localhost:1883");
         Duration interval = Duration.ofSeconds(Long.parseLong(env("INTERVAL_SECONDS", "30")));
 
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(SITES.size());
+        // 게이트웨이마다 자기 스레드에서 연결, 측정, 발행을 순서대로 처리한다.
         List<GatewaySimulator> gateways = SITES.stream()
                 .map(site -> new GatewaySimulator(site, brokerUri))
                 .toList();
-
-        for (GatewaySimulator gateway : gateways) {
-            scheduler.execute(gateway::connect);
-            scheduler.scheduleAtFixedRate(gateway::publishTelemetry,
-                    interval.toMillis(), interval.toMillis(), TimeUnit.MILLISECONDS);
-        }
+        gateways.forEach(gateway -> gateway.start(interval));
         Log.info("시뮬레이터 시작: 현장 %d곳, 브로커 %s, 주기 %d초", SITES.size(), brokerUri, interval.toSeconds());
 
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            scheduler.shutdownNow();
-            gateways.forEach(GatewaySimulator::close);
-        }));
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> gateways.forEach(GatewaySimulator::close)));
     }
 
     private static String env(String name, String defaultValue) {
