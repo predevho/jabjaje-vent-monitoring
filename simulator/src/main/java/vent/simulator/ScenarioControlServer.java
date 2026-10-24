@@ -19,6 +19,8 @@ import java.util.stream.Collectors;
  * <pre>
  * POST /sites/{현장ID}/filter-clog     필터 막힘 시작
  * POST /sites/{현장ID}/filter-replace  필터 교체
+ * POST /sites/{현장ID}/network-down    네트워크 끊김 (Last Will, #6)
+ * POST /sites/{현장ID}/network-up      네트워크 복구 (#6)
  * GET  /health                         동작 확인
  * </pre>
  * 시나리오가 늘면(#5, #7) {@link #SCENARIOS}에 추가한다.
@@ -31,7 +33,9 @@ public final class ScenarioControlServer {
     /** 시나리오 이름 → 게이트웨이에서 실행할 동작 */
     private static final Map<String, Consumer<GatewaySimulator>> SCENARIOS = Map.of(
             "filter-clog", GatewaySimulator::clogFilter,
-            "filter-replace", GatewaySimulator::replaceFilter);
+            "filter-replace", GatewaySimulator::replaceFilter,
+            "network-down", GatewaySimulator::networkDown,
+            "network-up", GatewaySimulator::networkUp);
 
     private final HttpServer server;
     private final Map<String, GatewaySimulator> gatewaysBySiteId;

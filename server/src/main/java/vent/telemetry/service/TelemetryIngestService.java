@@ -72,7 +72,7 @@ public class TelemetryIngestService {
         }
         device.markReceived(receivedAt);
         // 받는 쪽(이상 평가)은 이 트랜잭션이 커밋된 뒤에 실행된다 (ADR-0013).
-        eventPublisher.publishEvent(new TelemetryStoredEvent(topicDeviceId, message.messageId()));
+        eventPublisher.publishEvent(new TelemetryStoredEvent(topicDeviceId, device.getGatewayId(), message.messageId(), receivedAt));
         return TelemetryIngestResult.STORED;
     }
 

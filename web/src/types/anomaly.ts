@@ -8,7 +8,7 @@
  */
 
 /** 이상 규칙 이름. 규칙이 늘면(#5, #6, #7) 여기에 추가한다 */
-export type AnomalyRuleName = 'FILTER_CLOGGED'
+export type AnomalyRuleName = 'FILTER_CLOGGED' | 'GATEWAY_OFFLINE'
 
 /** 심각도: 정보, 주의, 심각 */
 export type AnomalySeverity = 'INFO' | 'WARN' | 'CRITICAL'

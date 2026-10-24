@@ -2,7 +2,8 @@
  * 현장 카드.
  *
  * 현장 하나의 기본 정보, 게이트웨이 상태, 열회수 환기장치의 최신 측정값을 보여준다.
- * 아직 측정값이 없으면 그렇다고 표시한다.
+ * 아직 측정값이 없으면 그렇다고 표시한다. 게이트웨이가 연결됨이 아니면 장비 상태를 알 수 없으므로
+ * "확인 불가"로 표시하고 마지막 값을 흐리게 보여 준다 (용어집: 확인 불가, #6).
  *
  * @author predevho (AI 보조: Claude)
  * @since 2026-10-23 (#2)
@@ -28,24 +29,33 @@ interface Props {
   telemetry: Telemetry | undefined
   /** 그 환기장치의 최근 측정값 (그래프용, #3) */
   recentTelemetry: Telemetry[]
+  /** "마지막 수신 N분 전"을 계산할 기준 시각 (#6) */
+  now: Date
 }
 
-export default function SiteCard({ site, ventilator, telemetry, recentTelemetry }: Props) {
+export default function SiteCard({ site, ventilator, telemetry, recentTelemetry, now }: Props) {
   const targetLabel = site.targetAirflowSource === 'TAB' ? 'TAB' : '최소 환기량'
+  // 게이트웨이가 연결되지 않은 동안 장비의 현재 상태는 알 수 없다. 장비가 멈췄다는 뜻은 아니다.
+  const unknown = site.gateway?.connectionState !== 'CONNECTED'
 
   return (
     <section className="card">
       <div className="card-header">
         <h2>{site.name}</h2>
-        {site.gateway && <ConnectionBadge state={site.gateway.connectionState} />}
+        {site.gateway && <ConnectionBadge gateway={site.gateway} now={now} />}
       </div>
       <div className="muted">
         {site.region} · {site.floorAreaM2}m² · {site.occupants}명 · 목표 풍량 {site.targetAirflowCmh} CMH ({targetLabel})
       </div>
       <div className="muted">열회수 환기장치 {ventilator ? `${ventilator.model} (${ventilator.id})` : '없음'}</div>
 
+      {unknown && (
+        <p className="unknown-note">
+          확인 불가 · 게이트웨이가 연결되지 않아 지금 상태를 알 수 없어요{telemetry && '. 아래는 마지막으로 받은 값이에요'}
+        </p>
+      )}
       {telemetry ? (
-        <table>
+        <table className={unknown ? 'stale' : undefined}>
           <tbody>
             <tr>
               <th>CO2</th>

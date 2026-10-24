@@ -7,6 +7,9 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -31,6 +34,9 @@ import org.eclipse.paho.mqttv5.common.packet.MqttProperties;
  * 연결이 끊긴 동안 쌓인 측정값은 다시 연결된 뒤 원래 측정 시각 그대로 올라가고, 서버는 이를 늦은 측정값으로 표시한다(ADR-0003).
  * 재접속은 {@link ReconnectBackoff}(지수 백오프 + jitter)로 한다. 모든 작업은 게이트웨이마다 스레드 하나에서 순서대로 돈다.
  *
+ * <p>연결할 때 상태 토픽에 {@code online}과 버전·지원 기능을 retained로 보고하고, Last Will로 {@code offline}을 등록한다(#6).
+ * 연결이 갑자기 끊기면 브로커가 이 offline을 대신 보낸다.
+ *
  * @author predevho (AI 보조: Claude)
  * @since 2026-10-23 (#2)
  */
@@ -42,6 +48,9 @@ public class GatewaySimulator {
     private static final int CONNECTION_TIMEOUT_SECONDS = 5;
     /** 30초 주기로 24시간 분량 */
     private static final int BUFFER_CAPACITY = 2_880;
+    /** online 상태 메시지로 보고하는 버전과 지원 기능 (스펙 4.4, #6) */
+    private static final String FIRMWARE_VERSION = "1.0.0";
+    private static final List<String> CAPABILITIES = List.of("BOOST", "HOOD_EVENT");
     private static final ObjectMapper JSON = new ObjectMapper()
             .registerModule(new JavaTimeModule())
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
@@ -52,6 +61,8 @@ public class GatewaySimulator {
     private final TelemetryBuffer<TelemetryMessage> buffer = new TelemetryBuffer<>(BUFFER_CAPACITY);
     private final ReconnectBackoff backoff = new ReconnectBackoff();
     private final ScheduledExecutorService worker;
+    /** 네트워크 끊김 시나리오(#6)가 켜져 있으면 true. 켜져 있는 동안은 다시 연결하지 않는다. 게이트웨이 스레드에서만 쓴다. */
+    private boolean networkDown;
 
     public GatewaySimulator(SiteConfig site, String brokerUri) {
         this.site = site;
@@ -73,15 +84,18 @@ public class GatewaySimulator {
 
     /** 한 번 연결을 시도한다. 실패하면 백오프만큼 기다렸다가 다시 시도하도록 예약한다(기다리는 동안에도 측정값은 계속 쌓인다). */
     private void tryConnect() {
-        if (client.isConnected()) {
+        if (networkDown || client.isConnected()) {
             return;
         }
         try {
             client.connect(connectionOptions());
+            // online을 못 보내면 브로커에는 예전 Last Will(offline)이 retained로 남는다. 연결을 끊고 처음부터 다시 시도한다.
+            publishStatus(onlineStatusJson());
             backoff.reset();
             Log.info("[%s] 브로커 연결됨, 쌓인 측정값 %d개", site.gatewayId(), buffer.size());
             flush();
         } catch (MqttException | RuntimeException e) {
+            dropConnectionQuietly();
             // 예상하지 못한 예외에서도 다음 시도를 예약해야 게이트웨이가 영구히 끊긴 채로 남지 않는다.
             Duration delay = backoff.nextDelay();
             Log.error("[%s] 브로커 연결 실패, %.1f초 뒤 재시도: %s",
@@ -96,7 +110,45 @@ public class GatewaySimulator {
         options.setAutomaticReconnect(false);
         options.setKeepAliveInterval(KEEP_ALIVE_SECONDS);
         options.setConnectionTimeout(CONNECTION_TIMEOUT_SECONDS);
+        // 연결이 갑자기 끊기면 브로커가 대신 보내는 offline (Last Will, retained)
+        MqttMessage will = new MqttMessage(offlineStatusJson());
+        will.setQos(QOS_AT_LEAST_ONCE);
+        will.setRetained(true);
+        options.setWill(statusTopic(), will);
         return options;
+    }
+
+    /** 상태 토픽에 retained로 보고한다. 서버가 나중에 구독해도 마지막 상태를 받을 수 있다. */
+    private void publishStatus(byte[] json) throws MqttException {
+        MqttMessage message = new MqttMessage(json);
+        message.setQos(QOS_AT_LEAST_ONCE);
+        message.setRetained(true);
+        client.publish(statusTopic(), message);
+    }
+
+    /** online: 버전과 지원 기능을 함께 보고한다 (스펙 4.4). */
+    private static byte[] onlineStatusJson() {
+        Map<String, Object> status = new LinkedHashMap<>();
+        status.put("state", "online");
+        status.put("firmwareVersion", FIRMWARE_VERSION);
+        status.put("schemaVersion", TelemetryMessage.SCHEMA_VERSION);
+        status.put("capabilities", CAPABILITIES);
+        return toJson(status);
+    }
+
+    private static byte[] offlineStatusJson() {
+        Map<String, Object> status = new LinkedHashMap<>();
+        status.put("state", "offline");
+        status.put("schemaVersion", TelemetryMessage.SCHEMA_VERSION);
+        return toJson(status);
+    }
+
+    private static byte[] toJson(Map<String, Object> status) {
+        try {
+            return JSON.writeValueAsBytes(status);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("상태 메시지를 만들 수 없음", e);
+        }
     }
 
     /** 측정값 하나를 만들어 버퍼에 넣고, 연결되어 있으면 쌓인 것을 보낸다. */
@@ -167,6 +219,38 @@ public class GatewaySimulator {
         });
     }
 
+    /**
+     * 네트워크 끊김 시나리오: DISCONNECT 없이 소켓을 끊는다. 브로커는 비정상 종료로 보고 Last Will(offline)을 보낸다.
+     * 켜져 있는 동안 측정값은 버퍼에 쌓이고, {@link #networkUp()} 전까지 다시 연결하지 않는다.
+     *
+     * @since 2026-10-24 (#6)
+     */
+    public void networkDown() {
+        worker.execute(() -> {
+            networkDown = true;
+            try {
+                client.disconnectForcibly(0, 1_000, false);
+            } catch (MqttException e) {
+                Log.error("[%s] 연결 끊기 실패: %s", site.gatewayId(), e.getMessage());
+            }
+            Log.info("[%s] 시나리오: 네트워크 끊김 (다시 연결하지 않음)", site.gatewayId());
+        });
+    }
+
+    /**
+     * 네트워크 복구 시나리오: 다시 연결하고, 쌓인 측정값을 보낸다.
+     *
+     * @since 2026-10-24 (#6)
+     */
+    public void networkUp() {
+        worker.execute(() -> {
+            networkDown = false;
+            backoff.reset();
+            Log.info("[%s] 시나리오: 네트워크 복구, 쌓인 측정값 %d개", site.gatewayId(), buffer.size());
+            tryConnect();
+        });
+    }
+
     public SiteConfig site() {
         return site;
     }
@@ -175,6 +259,8 @@ public class GatewaySimulator {
         worker.shutdownNow();
         try {
             if (client.isConnected()) {
+                // 정상 종료(DISCONNECT)는 Last Will을 보내지 않으므로 offline을 직접 보고한다.
+                publishStatus(offlineStatusJson());
                 client.disconnect();
             }
             client.close();
@@ -185,6 +271,22 @@ public class GatewaySimulator {
 
     private String topic() {
         return "jabjaje/" + site.siteId() + "/" + site.ventilatorId() + "/telemetry";
+    }
+
+    /** 연결 시도가 중간에 실패했을 때 반쯤 열린 연결을 정리한다. 실패해도 다음 시도에는 지장이 없다. */
+    private void dropConnectionQuietly() {
+        if (!client.isConnected()) {
+            return;
+        }
+        try {
+            client.disconnectForcibly(0, 1_000, false);
+        } catch (MqttException e) {
+            Log.error("[%s] 연결 정리 실패: %s", site.gatewayId(), e.getMessage());
+        }
+    }
+
+    private String statusTopic() {
+        return "jabjaje/" + site.siteId() + "/" + site.gatewayId() + "/status";
     }
 
     /**

@@ -1,4 +1,4 @@
-package vent.site.domain.type;
+package vent.gateway.domain.type;
 
 /**
  * 게이트웨이 연결 상태.

@@ -118,6 +118,20 @@ td {
   padding: 4px 0;
 }
 
+/* 확인 불가: 게이트웨이가 연결되지 않아 마지막 값을 흐리게 보여 준다 (#6) */
+.unknown-note {
+  background: #eaeef2;
+  color: #424a53;
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  margin: 10px 0 0;
+}
+
+.stale {
+  opacity: 0.45;
+}
+
 /* 열린 이상 목록 (#4) */
 .anomaly-card {
   margin-bottom: 16px;

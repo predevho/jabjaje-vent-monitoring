@@ -19,6 +19,14 @@ export type TargetAirflowSource = 'TAB' | 'MINIMUM_AIRFLOW'
 export interface Gateway {
   id: string
   connectionState: ConnectionState
+  /** 서버가 마지막으로 받은 시각(UTC). 한 번도 받지 않았으면 null (#6) */
+  lastReceivedAt: string | null
+  /** 끊긴 시각(UTC). 일시 끊김·오프라인일 때만 (#6) */
+  disconnectedAt: string | null
+  /** 게이트웨이가 보고한 버전 (#6) */
+  firmwareVersion: string | null
+  /** 게이트웨이가 보고한 지원 기능. 예: BOOST, HOOD_EVENT (#6) */
+  capabilities: string[] | null
 }
 
 export interface Device {

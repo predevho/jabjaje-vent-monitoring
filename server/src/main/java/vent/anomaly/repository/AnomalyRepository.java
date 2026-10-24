@@ -18,6 +18,9 @@ public interface AnomalyRepository extends JpaRepository<Anomaly, Long> {
     /** 그 장비, 그 규칙으로 열린 이상. DB 부분 유니크 인덱스 때문에 많아야 하나다. */
     Optional<Anomaly> findByDeviceIdAndRuleAndStatus(String deviceId, AnomalyRuleName rule, AnomalyStatus status);
 
+    /** 그 게이트웨이, 그 규칙으로 열린 이상. 많아야 하나다 (#6). */
+    Optional<Anomaly> findByGatewayIdAndRuleAndStatus(String gatewayId, AnomalyRuleName rule, AnomalyStatus status);
+
     /** 상태별 이상 목록. 최근에 생긴 것부터. */
     List<Anomaly> findByStatusOrderByOpenedAtDesc(AnomalyStatus status);
 }

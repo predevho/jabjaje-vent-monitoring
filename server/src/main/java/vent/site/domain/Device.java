@@ -8,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import java.time.OffsetDateTime;
+import vent.gateway.domain.Gateway;
 import vent.site.domain.type.DeviceType;
 
 /**
@@ -72,6 +73,15 @@ public class Device {
 
     public Site getSite() {
         return site;
+    }
+
+    /**
+     * 이 장비를 연결하는 게이트웨이 ID. 게이트웨이를 불러오지 않고 ID만 읽는다.
+     *
+     * @since 2026-10-24 (#6)
+     */
+    public String getGatewayId() {
+        return gateway.getId();
     }
 
     public OffsetDateTime getLastReceivedAt() {

@@ -38,6 +38,12 @@ vent:
       model-thresholds-pa:
         "[DOMEKT R 300V]": 150
         "[DOMEKT R 450V]": 150
+  gateway:
+    # 게이트웨이 연결 상태 기준 (스펙 6.3, #6). 시연에서는 offline-after를 짧게 바꿔 쓴다.
+    connection:
+      interrupted-after: 2m
+      offline-after: 30m
+      check-interval: 30s
   mqtt:
     # Docker Compose overrides this with the broker's service name.
     server-uri: tcp://localhost:1883

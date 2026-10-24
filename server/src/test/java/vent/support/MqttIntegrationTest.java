@@ -36,7 +36,7 @@ import vent.global.mqtt.MqttClientManager;
  * MQTT 통합 테스트 공통 기반.
  *
  * <p>실제 Mosquitto와 PostgreSQL 컨테이너를 띄우고, 테스트용 게이트웨이 클라이언트로 측정값을 발행하는 도우미를 준다.
- * 측정값(#2, #3)과 이상(#4) 테스트가 함께 쓴다.
+ * 측정값(#2, #3), 이상(#4), 게이트웨이 연결 상태(#6) 테스트가 함께 쓴다.
  *
  * <ul>
  *   <li>컨테이너는 JVM에서 한 번만 띄워 모든 테스트 클래스가 함께 쓴다(singleton container). 클래스마다 다시 띄우면
@@ -73,6 +73,8 @@ public abstract class MqttIntegrationTest {
         registry.add("vent.mqtt.server-uri", MqttIntegrationTest::brokerUri);
         // 로컬에서 실행 중인 시연 서버(vent-server)와 겹치지 않는 클라이언트 ID
         registry.add("vent.mqtt.client-id", () -> "vent-server-test-" + UUID.randomUUID());
+        // 무수신 검사 스케줄러는 끈다. 테스트가 검사 시각을 직접 넣어 부른다(#6).
+        registry.add("vent.gateway.connection.check-enabled", () -> "false");
     }
 
     protected static MqttClient gateway;
@@ -113,6 +115,13 @@ public abstract class MqttIntegrationTest {
         MqttMessage message = new MqttMessage(json.getBytes(StandardCharsets.UTF_8));
         message.setQos(QOS_AT_LEAST_ONCE);
         gateway.publish("jabjaje/" + siteId + "/" + deviceId + "/telemetry", message);
+    }
+
+    /** 게이트웨이 상태 토픽에 보낸다(#6). 테스트끼리 남지 않도록 retained로 보내지 않는다. */
+    protected static void publishStatus(String siteId, String gatewayId, String json) throws Exception {
+        MqttMessage message = new MqttMessage(json.getBytes(StandardCharsets.UTF_8));
+        message.setQos(QOS_AT_LEAST_ONCE);
+        gateway.publish("jabjaje/" + siteId + "/" + gatewayId + "/status", message);
     }
 
     /** 지금 측정한 정상 측정값. extraFields는 앞에 끼워 넣을 추가 필드다. */

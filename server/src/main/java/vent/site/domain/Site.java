@@ -11,6 +11,7 @@ import jakarta.persistence.OrderBy;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import vent.gateway.domain.Gateway;
 import vent.site.domain.type.TargetAirflowSource;
 
 /**

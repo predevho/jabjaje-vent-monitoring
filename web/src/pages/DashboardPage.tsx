@@ -84,6 +84,7 @@ export default function DashboardPage() {
               ventilator={ventilator}
               telemetry={ventilator && latestByDevice.get(ventilator.id)}
               recentTelemetry={(ventilator && recentByDevice.get(ventilator.id)) ?? []}
+              now={loadedAt ?? new Date(0)}
             />
           )
         })}

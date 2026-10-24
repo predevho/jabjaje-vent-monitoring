@@ -52,8 +52,26 @@ public class Anomaly {
     /** 장비를 대상으로 열린 이상을 만든다. */
     public static Anomaly openForDevice(String deviceId, AnomalyRuleName rule, AnomalySeverity severity,
                                         String message, OffsetDateTime openedAt) {
-        Anomaly anomaly = new Anomaly();
+        Anomaly anomaly = open(rule, severity, message, openedAt);
         anomaly.deviceId = deviceId;
+        return anomaly;
+    }
+
+    /**
+     * 게이트웨이를 대상으로 열린 이상을 만든다.
+     *
+     * @since 2026-10-24 (#6)
+     */
+    public static Anomaly openForGateway(String gatewayId, AnomalyRuleName rule, AnomalySeverity severity,
+                                         String message, OffsetDateTime openedAt) {
+        Anomaly anomaly = open(rule, severity, message, openedAt);
+        anomaly.gatewayId = gatewayId;
+        return anomaly;
+    }
+
+    /** 대상만 비워 둔 열린 이상. 대상(장비 또는 게이트웨이)은 부르는 쪽이 채운다. */
+    private static Anomaly open(AnomalyRuleName rule, AnomalySeverity severity, String message, OffsetDateTime openedAt) {
+        Anomaly anomaly = new Anomaly();
         anomaly.rule = rule;
         anomaly.severity = severity;
         anomaly.status = AnomalyStatus.OPEN;

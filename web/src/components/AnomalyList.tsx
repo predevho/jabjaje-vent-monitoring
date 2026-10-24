@@ -1,7 +1,8 @@
 /**
  * 열린 이상 목록.
  *
- * 규칙, 대상(현장·장비), 심각도, 발생 시각, 설명을 표로 보여준다. 발생 시각은 판단 근거가 된 측정값의 측정 시각이다 (#4).
+ * 규칙, 대상(현장·장비 또는 게이트웨이), 심각도, 발생 시각, 설명을 표로 보여준다.
+ * 발생 시각은 판단 근거가 된 측정값의 측정 시각이다 (#4). 게이트웨이 오프라인은 오프라인이 된 시각이다 (#6).
  *
  * @author predevho (AI 보조: Claude)
  * @since 2026-10-24 (#4)
@@ -10,6 +11,7 @@ import type { Anomaly, AnomalyRuleName, AnomalySeverity } from '../types/anomaly
 
 const RULE_LABELS: Record<AnomalyRuleName, string> = {
   FILTER_CLOGGED: '필터 막힘',
+  GATEWAY_OFFLINE: '게이트웨이 오프라인',
 }
 
 const SEVERITY_LABELS: Record<AnomalySeverity, string> = {
@@ -52,7 +54,7 @@ export default function AnomalyList({ anomalies }: { anomalies: Anomaly[] }) {
                 </td>
                 <td>{RULE_LABELS[anomaly.rule] ?? anomaly.rule}</td>
                 <td>
-                  {anomaly.siteName ?? '-'} · {anomaly.deviceId ?? anomaly.gatewayId}
+                  {anomaly.siteName ?? '-'} · {anomaly.deviceId ?? `게이트웨이 ${anomaly.gatewayId}`}
                 </td>
                 <td>{TIME_FORMAT.format(new Date(anomaly.openedAt))}</td>
                 <td className="anomaly-message">{anomaly.message}</td>

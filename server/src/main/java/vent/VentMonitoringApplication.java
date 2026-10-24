@@ -3,6 +3,7 @@ package vent;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * 환기 모니터링 서버의 진입점.
@@ -14,6 +15,8 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
  */
 @SpringBootApplication
 @ConfigurationPropertiesScan
+// 게이트웨이 무수신 검사(#6)
+@EnableScheduling
 public class VentMonitoringApplication {
 
     public static void main(String[] args) {

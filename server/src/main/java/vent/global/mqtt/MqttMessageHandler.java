@@ -19,9 +19,10 @@ public interface MqttMessageHandler {
      * <p>다시 받으면 처리할 수 있는 실패(DB 장애)는 {@link MqttHandleResult#RETRY_LATER}를 돌려준다.
      * 다시 받아도 소용없는 메시지는 로그를 남기고 {@link MqttHandleResult#DONE}을 돌려준다. 그렇지 않으면 같은 메시지를 끝없이 다시 받는다.
      *
-     * @param topic   실제로 받은 토픽
-     * @param payload 메시지 본문
+     * @param topic    실제로 받은 토픽
+     * @param payload  메시지 본문
+     * @param retained 브로커가 보관하던 메시지인지(구독할 때 받은 옛날 메시지). 상태 토픽(#6)에서 쓴다
      * @return 처리 결과. 이 값으로 수신 확인 여부가 정해진다
      */
-    MqttHandleResult handle(String topic, byte[] payload);
+    MqttHandleResult handle(String topic, byte[] payload, boolean retained);
 }

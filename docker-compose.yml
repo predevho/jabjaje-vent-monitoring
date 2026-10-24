@@ -39,6 +39,9 @@ services:
       VENT_MQTT_SERVER_URI: tcp://mosquitto:1883
       # 시연용 현장 3곳 시드 데이터를 넣는다 (ADR-0011)
       SPRING_PROFILES_ACTIVE: demo
+      # 게이트웨이 연결 기준 (#6). 시연 때는 짧게: VENT_GATEWAY_OFFLINE_AFTER=3m docker compose up -d
+      VENT_GATEWAY_CONNECTION_INTERRUPTED_AFTER: ${VENT_GATEWAY_INTERRUPTED_AFTER:-2m}
+      VENT_GATEWAY_CONNECTION_OFFLINE_AFTER: ${VENT_GATEWAY_OFFLINE_AFTER:-30m}
     ports:
       - "8080:8080"
 

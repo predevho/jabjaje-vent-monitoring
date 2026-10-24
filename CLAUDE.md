@@ -12,6 +12,7 @@ Code lives under `server/src/main/java/vent/`. Each feature (named after a GLOSS
 vent/<feature>/
 ├── controller/      HTTP (REST) endpoints. No business logic, no @Transactional.
 ├── listener/        Message entry points (MQTT subscriptions, Spring events from other features). Same rules as controller.
+├── scheduler/       Timed entry points (@Scheduled). Same rules as controller: call one service method, no logic.
 ├── service/         Use cases. Owns @Transactional boundaries.
 ├── rule/            Decision classes: input record in, outcome out. Only their own settings record is injected (no repositories, no DB). Each has a unit test.
 ├── repository/      Spring Data JPA repositories (one per aggregate root). Native SQL only where PostgreSQL features are needed.

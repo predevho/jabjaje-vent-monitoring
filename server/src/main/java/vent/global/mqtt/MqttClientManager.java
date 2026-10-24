@@ -166,7 +166,7 @@ public class MqttClientManager implements SmartLifecycle, MqttCallback {
         for (MqttMessageHandler handler : handlers) {
             if (MqttTopicValidator.isMatched(handler.topicFilter(), topic)) {
                 try {
-                    if (handler.handle(topic, message.getPayload()) == MqttHandleResult.RETRY_LATER) {
+                    if (handler.handle(topic, message.getPayload(), message.isRetained()) == MqttHandleResult.RETRY_LATER) {
                         result = MqttHandleResult.RETRY_LATER;
                     }
                 } catch (RuntimeException e) {

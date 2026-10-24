@@ -10,5 +10,7 @@ package vent.anomaly.domain.type;
  */
 public enum AnomalyRuleName {
     /** 필터 막힘: 필터 차압이 모델별 기준을 넘음 */
-    FILTER_CLOGGED
+    FILTER_CLOGGED,
+    /** 게이트웨이 오프라인: 연결이 끊긴 상태가 오래(기본 30분) 이어짐. 이상은 게이트웨이에 붙는다 (#6) */
+    GATEWAY_OFFLINE
 }
