@@ -360,3 +360,99 @@ tr.selected {
   white-space: pre-wrap;
   word-break: break-all;
 }
+
+/* 판정 (#11) */
+.verdict-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  border-top: 1px solid #eaeef2;
+  padding-top: 10px;
+  font-size: 13px;
+}
+
+.verdict-form h3 {
+  font-size: 15px;
+  margin: 0;
+}
+
+.verdict-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #424a53;
+}
+
+.verdict-form label.inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.verdict-form fieldset {
+  border: 1px solid #d1d9e0;
+  border-radius: 6px;
+  padding: 6px 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.verdict-form legend {
+  color: #424a53;
+  padding: 0 4px;
+}
+
+.verdict-form input:not([type='checkbox']),
+.verdict-form textarea {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid #d1d9e0;
+  border-radius: 6px;
+  color: #1f2328;
+  background: #fff;
+}
+
+.verdict-form button {
+  align-self: flex-start;
+  font: inherit;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid #116329;
+  background: #1a7f37;
+  color: #fff;
+  cursor: pointer;
+}
+
+.verdict-form button:disabled {
+  border-color: #d1d9e0;
+  background: #eaeef2;
+  color: #818b98;
+  cursor: not-allowed;
+}
+
+.verdict {
+  margin-top: 12px;
+  border-top: 1px solid #eaeef2;
+  padding-top: 10px;
+}
+
+.verdict h3 {
+  font-size: 15px;
+  margin: 0;
+}
+
+.confirmed-reply {
+  background: #dafbe1;
+  color: #116329;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+
+.customer-view {
+  margin: 10px 0 0;
+  font-size: 13px;
+  border-top: 1px dashed #d1d9e0;
+  padding-top: 8px;
+}

@@ -2,13 +2,13 @@
  * A/S 신청 패널: 접수 양식, 최근 신청 목록, 상세 (#10).
  *
  * 시연용으로 직원 화면에 고객 접수 양식을 함께 둔다. 접수하면 바로 접수됨으로 목록에 붙고, AI 소견이 붙으면
- * 소견 완료 또는 사람 확인 필요로 바뀐다. 목록은 5초마다 다시 불러온다.
+ * 소견 완료 또는 사람 확인 필요로 바뀐다. 상세에서 판정하면 판정됨이 된다(#11). 목록은 5초마다 다시 불러온다.
  *
  * @author predevho (AI 보조: Claude)
  * @since 2026-10-24 (#10)
  */
 import { useEffect, useState, type FormEvent } from 'react'
-import { createServiceRequest, fetchServiceRequests } from '../api/serviceRequests.ts'
+import { createServiceRequest, fetchPartCatalog, fetchServiceRequests } from '../api/serviceRequests.ts'
 import type { ServiceRequest } from '../types/serviceRequest.ts'
 import type { Site } from '../types/site.ts'
 import ServiceRequestDetail from './ServiceRequestDetail.tsx'
@@ -31,6 +31,7 @@ export default function ServiceRequestPanel({ sites }: Props) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
+  const [partCatalog, setPartCatalog] = useState<string[]>([])
 
   const currentSiteId = siteId ?? sites[0]?.id ?? null
   const currentSite = sites.find((site) => site.id === currentSiteId)
@@ -54,6 +55,20 @@ export default function ServiceRequestPanel({ sites }: Props) {
       clearInterval(timer)
     }
   }, [reloadKey])
+
+  useEffect(() => {
+    let cancelled = false
+    fetchPartCatalog()
+      .then((parts) => {
+        if (!cancelled) setPartCatalog(parts)
+      })
+      .catch(() => {
+        // 부품 목록이 없으면 판정 양식에 부품 선택만 비어 보인다
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -157,7 +172,9 @@ export default function ServiceRequestPanel({ sites }: Props) {
           )}
         </tbody>
       </table>
-      {selectedId !== null && <ServiceRequestDetail id={selectedId} />}
+      {selectedId !== null && (
+        <ServiceRequestDetail id={selectedId} partCatalog={partCatalog} onDecided={() => setReloadKey((key) => key + 1)} />
+      )}
     </section>
   )
 }

@@ -72,6 +72,19 @@ public class ServiceRequest {
         }
     }
 
+    /**
+     * 직원이 판정했다 (#11). 소견 완료나 사람 확인 필요일 때만 판정할 수 있다.
+     *
+     * @throws IllegalStateException 접수됨(AI 소견을 만드는 중)이거나 이미 판정됨일 때
+     * @since 2026-10-24 (#11)
+     */
+    public void markDecided() {
+        if (status != ServiceRequestStatus.ASSESSED && status != ServiceRequestStatus.NEEDS_HUMAN) {
+            throw new IllegalStateException("판정할 수 없는 상태: " + status);
+        }
+        status = ServiceRequestStatus.DECIDED;
+    }
+
     public Long getId() {
         return id;
     }

@@ -13,8 +13,10 @@ import vent.servicerequest.domain.ServiceRequest;
 import vent.servicerequest.dto.request.CreateServiceRequestRequest;
 import vent.servicerequest.dto.response.AiAssessmentResponse;
 import vent.servicerequest.dto.response.ServiceRequestResponse;
+import vent.servicerequest.dto.response.VerdictResponse;
 import vent.servicerequest.repository.AiAssessmentRepository;
 import vent.servicerequest.repository.ServiceRequestRepository;
+import vent.servicerequest.repository.VerdictRepository;
 import vent.site.domain.Site;
 import vent.site.repository.DeviceRepository;
 import vent.site.repository.SiteRepository;
@@ -37,15 +39,17 @@ public class ServiceRequestService {
     private final AiAssessmentRepository assessmentRepository;
     private final SiteRepository siteRepository;
     private final DeviceRepository deviceRepository;
+    private final VerdictRepository verdictRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     public ServiceRequestService(ServiceRequestRepository requestRepository, AiAssessmentRepository assessmentRepository,
                                  SiteRepository siteRepository, DeviceRepository deviceRepository,
-                                 ApplicationEventPublisher eventPublisher) {
+                                 VerdictRepository verdictRepository, ApplicationEventPublisher eventPublisher) {
         this.requestRepository = requestRepository;
         this.assessmentRepository = assessmentRepository;
         this.siteRepository = siteRepository;
         this.deviceRepository = deviceRepository;
+        this.verdictRepository = verdictRepository;
         this.eventPublisher = eventPublisher;
     }
 
@@ -78,7 +82,7 @@ public class ServiceRequestService {
 
         ServiceRequest saved = requestRepository.save(ServiceRequest.received(site.getId(), deviceId, message, name, phone, now));
         eventPublisher.publishEvent(new ServiceRequestReceivedEvent(saved.getId()));
-        return ServiceRequestResponse.from(saved, site.getName(), List.of());
+        return ServiceRequestResponse.from(saved, site.getName(), List.of(), null);
     }
 
     /** 최근 신청 20개. 소견 시도는 상세 조회에서 본다. */
@@ -88,11 +92,11 @@ public class ServiceRequestService {
         Map<Long, String> siteNames = siteRepository.findAllById(requests.stream().map(ServiceRequest::getSiteId).distinct().toList())
                 .stream().collect(Collectors.toMap(Site::getId, Site::getName, (a, b) -> a));
         return requests.stream()
-                .map(r -> ServiceRequestResponse.from(r, siteNames.get(r.getSiteId()), List.of()))
+                .map(r -> ServiceRequestResponse.from(r, siteNames.get(r.getSiteId()), List.of(), null))
                 .toList();
     }
 
-    /** 신청 하나와 AI 소견 시도 전체. */
+    /** 신청 하나와 AI 소견 시도 전체, 판정(#11). */
     @Transactional(readOnly = true)
     public ServiceRequestResponse findDetail(Long id) {
         ServiceRequest request = requestRepository.findById(id)
@@ -101,7 +105,8 @@ public class ServiceRequestService {
         List<AiAssessmentResponse> assessments = assessmentRepository.findByServiceRequestIdOrderByAttemptAsc(id).stream()
                 .map(AiAssessmentResponse::from)
                 .toList();
-        return ServiceRequestResponse.from(request, siteName, assessments);
+        VerdictResponse verdict = verdictRepository.findByServiceRequestId(id).map(VerdictResponse::from).orElse(null);
+        return ServiceRequestResponse.from(request, siteName, assessments, verdict);
     }
 
     private static String blankToNull(String value) {

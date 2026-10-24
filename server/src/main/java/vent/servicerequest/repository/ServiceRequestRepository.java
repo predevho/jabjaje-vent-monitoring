@@ -1,9 +1,12 @@
 package vent.servicerequest.repository;
 
+import jakarta.persistence.LockModeType;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -16,6 +19,15 @@ import vent.servicerequest.domain.ServiceRequest;
  * @since 2026-10-24 (#10)
  */
 public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, Long> {
+
+    /**
+     * 신청 하나를 잠가서 읽는다. 두 직원이 같은 신청을 동시에 판정하지 못하게 한 줄로 세운다(#11).
+     *
+     * @since 2026-10-24 (#11)
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select r from ServiceRequest r where r.id = :id")
+    Optional<ServiceRequest> findByIdForUpdate(@Param("id") Long id);
 
     /** 최근 신청부터. */
     List<ServiceRequest> findAllByOrderByCreatedAtDesc(Limit limit);

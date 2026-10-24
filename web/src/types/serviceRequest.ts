@@ -44,6 +44,49 @@ export interface AiAssessment {
   createdAt: string
 }
 
+/** 판정에서 AI 소견을 고칠 수 있는 항목 (#11) */
+export type VerdictField =
+  | 'CAUSES'
+  | 'TECHNICIAN_ACTIONS'
+  | 'PARTS'
+  | 'NEEDS_VISIT'
+  | 'RECOMMENDED_SERVICES'
+  | 'CUSTOMER_REPLY'
+
+/** 판정 (#11). 직원이 확정한 원인, 조치, 고객 안내 */
+export interface Verdict {
+  /** 참고한 AI 소견. 처음부터 판정했으면 null */
+  aiAssessmentId: number | null
+  causes: string[]
+  technicianActions: string[]
+  parts: string[]
+  needsVisit: boolean
+  recommendedServices: string[]
+  customerReply: string
+  editedFromAi: boolean
+  /** AI 소견에서 고친 항목 */
+  editedFields: VerdictField[]
+  decidedBy: string
+  decidedAt: string
+}
+
+export interface CreateVerdict {
+  causes: string[]
+  technicianActions: string[]
+  parts: string[]
+  needsVisit: boolean
+  recommendedServices: string[]
+  customerReply: string
+  decidedBy: string
+}
+
+/** 고객에게 보여 줄 안내 (#11). 판정 전이면 reply가 null */
+export interface CustomerReply {
+  status: ServiceRequestStatus
+  reply: string | null
+  decidedAt: string | null
+}
+
 export interface ServiceRequest {
   id: number
   siteId: number
@@ -56,6 +99,8 @@ export interface ServiceRequest {
   createdAt: string
   /** 상세 조회에서만 채워진다 */
   assessments: AiAssessment[]
+  /** 판정 (#11). 판정 전이거나 목록 조회면 null */
+  verdict: Verdict | null
 }
 
 export interface CreateServiceRequest {

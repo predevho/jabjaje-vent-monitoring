@@ -311,12 +311,16 @@ SERVICE_REQUEST 1──0..1 VERDICT
 |---|---|---|
 | id | bigint PK | |
 | service_request_id | bigint FK, UNIQUE | A/S 신청당 하나 |
-| ai_assessment_id | bigint FK, nullable | 참고한 AI 소견. 사람이 처음부터 판정하면 비어 있다 |
-| causes | jsonb | 확정한 원인 |
-| actions | jsonb | 확정한 조치와 부품 |
+| ai_assessment_id | bigint FK, nullable | 참고한 AI 소견(검증을 통과한 시도). 사람이 처음부터 판정하면 비어 있다 |
+| causes | jsonb | 확정한 원인 제목 (가능성 순) |
+| technician_actions | jsonb | 확정한 조치 (#11에서 `actions`를 AI 소견과 같은 항목으로 나눔) |
+| parts | jsonb | 필요한 부품. 판매 목록에 있는 이름만 |
+| needs_visit | boolean | 방문이 필요한지 |
+| recommended_services | jsonb | 권하는 점검 (TAB, 블로어도어 테스트) |
 | customer_reply | text | 고객에게 보낼 안내 |
-| edited_from_ai | boolean | AI 소견을 고쳤는지 |
-| decided_by | varchar | 판정한 직원 |
+| edited_from_ai | boolean | AI 소견을 고쳤는지. 서버가 비교해서 정한다 |
+| edited_fields | jsonb | 고친 항목 이름. AI 소견 품질 기록 (#11) |
+| decided_by | varchar | 판정한 직원 (로그인이 없어 이름을 직접 적는다) |
 | decided_at | timestamptz | |
 
 ### 5.2 데이터 검증 (ingest)
@@ -453,7 +457,8 @@ SERVICE_REQUEST 1──0..1 VERDICT
 3. Claude API를 호출해 AI 소견을 받는다.
 4. AI 소견을 코드로 검증한다.
 5. 통과하면 `ASSESSED`, 실패하면 `NEEDS_HUMAN`으로 바꾼다.
-6. 직원이 대시보드에서 AI 소견을 보고 판정한다(`DECIDED`). 그대로 승인하거나 고칠 수 있고, `NEEDS_HUMAN`이면 처음부터 판정한다. AI가 고객에게 직접 답하지 않는다.
+6. 직원이 대시보드에서 AI 소견을 보고 판정한다(`DECIDED`). 그대로 판정하거나 고쳐서 판정할 수 있고, `NEEDS_HUMAN`이면 처음부터 판정한다. AI가 고객에게 직접 답하지 않는다.
+   - 구현(#11): `POST /api/service-requests/{id}/verdict`. 소견 완료·사람 확인 필요일 때만 판정하고, 접수됨(AI 소견을 만드는 중)과 판정됨은 409. 신청 행을 잠그고 신청당 판정 하나(유니크). 고쳤는지와 고친 항목은 서버가 통과한 AI 소견(마지막 통과 시도)과 항목별로 비교해 정한다(앞뒤 공백·빈 항목 무시, 원인만 순서까지, 조치·부품·권하는 점검은 순서 무시). 고친 항목 이름은 `CAUSES`, `TECHNICIAN_ACTIONS`, `PARTS`, `NEEDS_VISIT`, `RECOMMENDED_SERVICES`, `CUSTOMER_REPLY`. 필수: 원인(적어도 하나), 고객 안내문, 담당자 이름. 부품은 판매 목록에서만(화면은 `GET /api/service-requests/parts`로 목록을 받아 체크박스로 고른다). 직원의 안내문은 금액·무상 표현을 막지 않는다(직원이 마지막 안전장치). 고객용 `GET /api/service-requests/{id}/customer-reply`는 판정 전에는 안내문이 없고 판정 뒤에만 확정된 안내를 준다(ADR-0005).
 
 ### 8.2 상황 요약 (코드가 계산)
 - 원본 측정값 대신 통계만 보낸다. 예: 평균·최대 CO2, 급기 대비 목표 풍량 비율, 필터 차압 추세(7일 전 → 현재), 바이패스 누적 시간, 후드 연동 성공률, 오프라인 횟수.
@@ -687,6 +692,7 @@ v1 설계를 통신 안정성, 보안, 제어 안전, 데이터 품질, AI, 운�
   - A/S 접수 → A/S 신청(`as_ticket` → `service_request`), 1차 진단 → AI 소견(`ai_assessment`), 진단 검토 → 판정(`verdict` 테이블 추가)
   - 숫자 기준 문장에서 "이상"(≥) 대신 "넘게", "도달" 사용
 - v12: #13 반영. 브로커 계정·ACL(최소 권한), 익명 거부, 비밀번호는 시작할 때 환경변수로 생성, 계정 이름 = 클라이언트 ID, TLS·장비별 인증서는 README에 운영 대응으로
+- v16: #11 반영. 판정 API·화면(그대로 판정·고쳐서 판정·처음부터 판정, "승인"은 쓰지 않음), 판정 가능 상태와 409, 서버가 고친 항목 비교, `verdict`를 AI 소견과 같은 항목으로 나누고 `edited_fields` 추가(V12), 고객용 안내 조회(판정 뒤에만)
 - v15: #10 반영. A/S 신청 접수(즉시 `RECEIVED`)와 백그라운드 AI 소견, 상황 요약 지표(바이패스 시간·비율, 데이터 충분도, 장비 목록), 검증(값 있는 지표만 근거, 금액·무상 표현 확대, 태그 제거), 시도마다 기록·최대 2번, 맡기·재처리(ADR-0015), 가짜 AI 모드, `service_request` 고객 이름·연락처·맡은 시각과 `ai_assessment` 시도·원문·통과 컬럼(V11), 8.4 예시의 `supplyToDesignRatio` → `supplyToTargetRatio`
 - v14: #9 반영. 재시도(2초 주기, 같은 commandId·만료 시각), 시간 초과와 `COMMAND_TIMEOUT`, 밀려남, 늦은 응답(적용·거절), MQTT 5 메시지 만료(남은 시간), 장비 세션 유지·0.5초 묶음·commandId 기억·응답 버퍼, 조용한 끊김 시나리오, V10
 - v13: #8 반영. 부스트 왕복(커밋 뒤 발행, QoS 1·retained 없음, 적용·거절 응답), 잘못된 요청은 400·기록 안 함, 거절 사유(동결 방지, 후드 연동 중), 측정값 `boost`와 목표 풍량 미달의 부스트 제외, command 테이블은 #8 컬럼만(V9)
