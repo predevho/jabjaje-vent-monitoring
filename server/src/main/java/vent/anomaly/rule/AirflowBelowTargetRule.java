@@ -60,7 +60,7 @@ public class AirflowBelowTargetRule implements DeviceAnomalyRule {
                 continuity.maxGap(), properties.lasting());
         if (below) {
             int percent = (int) Math.round(latest.supplyCmh() * 100.0 / input.targetAirflowCmh());
-            String message = "급기 %dCMH, 목표 풍량 %dCMH의 %d%% (%d%% 미만이 %s 이상 이어짐). 필터·덕트·팬 설정을 확인하세요"
+            String message = "급기 %dCMH, 목표 풍량 %dCMH의 %d%% (%d%% 미만이 %s 동안 이어짐). 필터·덕트·팬 설정을 확인하세요"
                     .formatted(latest.supplyCmh(), input.targetAirflowCmh(), percent,
                             Math.round(properties.ratio() * 100), AnomalyRuleStreak.describe(properties.lasting()));
             return AnomalyRuleOutcome.raise(AnomalySeverity.WARN, message, latest.measuredAt());

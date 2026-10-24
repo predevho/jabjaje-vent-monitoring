@@ -59,7 +59,7 @@ public class Co2HighRule implements DeviceAnomalyRule {
                 continuity.maxGap(), properties.lasting());
         if (high) {
             AnomalySeverity severity = latest.co2Ppm() > properties.criticalPpm() ? AnomalySeverity.CRITICAL : AnomalySeverity.WARN;
-            String message = "CO2 %,dppm (%,dppm 초과가 %s 이상 이어짐). 환기량과 재실 인원을 확인하세요"
+            String message = "CO2 %,dppm (%,dppm 초과가 %s 동안 이어짐). 환기량과 재실 인원을 확인하세요"
                     .formatted(latest.co2Ppm(), properties.raisePpm(), AnomalyRuleStreak.describe(properties.lasting()));
             return AnomalyRuleOutcome.raise(severity, message, latest.measuredAt());
         }
