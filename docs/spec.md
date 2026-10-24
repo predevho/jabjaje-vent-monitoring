@@ -258,7 +258,7 @@ SERVICE_REQUEST 1──0..1 VERDICT
 | message | text | |
 | opened_at, resolved_at | timestamptz | |
 
-부분 유니크 인덱스: `(COALESCE(device_id, gateway_id), rule) WHERE status = 'OPEN'` — 같은 대상, 같은 규칙으로 열린 이상은 하나만.
+부분 유니크 인덱스: `(device_id, rule)`와 `(gateway_id, rule)` 각각 `WHERE status = 'OPEN'` — 같은 대상, 같은 규칙으로 열린 이상은 하나만. 대상 칸마다 따로 두어 장비 ID와 게이트웨이 ID가 같아도 부딪히지 않는다.
 
 **command**
 | 컬럼 | 타입 | 설명 |
@@ -331,7 +331,7 @@ SERVICE_REQUEST 1──0..1 VERDICT
 | 규칙 | 발생 | 해제 | 심각도 |
 |---|---|---|---|
 | `CO2_HIGH` | 1,000ppm 초과가 10분 지속 | 900ppm 미만이 10분 지속 | WARN, 1,500ppm 초과면 CRITICAL |
-| `FILTER_CLOGGED` | 필터 차압이 모델별 기준 초과 (초기값 150Pa) | 기준 아래로 내려감 | WARN |
+| `FILTER_CLOGGED` | 필터 차압이 모델별 기준 초과 (초기값 150Pa) | 기준보다 20Pa 넘게 낮아짐 (130Pa 미만, 필터 교체) | WARN |
 | `AIRFLOW_BELOW_TARGET` | 급기가 목표 풍량의 80% 미만으로 30분 지속 (부스트·바이패스 중 제외) | 80%에 다시 도달 | WARN |
 | `BYPASS_TOO_LONG` | 바이패스 60분 넘게 지속 | 바이패스 꺼짐 | WARN |
 | `GATEWAY_OFFLINE` | 게이트웨이가 오프라인이 됨 (일시 끊김이 30분 넘게 이어짐). 이상은 게이트웨이에 붙음 | 다시 연결 | WARN |
@@ -342,7 +342,7 @@ SERVICE_REQUEST 1──0..1 VERDICT
 - 기준값은 설정 파일에 둔다. 필터 차압 기준은 모델별로 둔다. 실제 기준값은 제조사 매뉴얼로 확인해야 한다.
 
 ### 6.2 평가 방식
-- 측정값이 들어올 때마다 해당 장비의 규칙을 평가한다. 오프라인 규칙은 30초 주기 스케줄러로 평가한다.
+- 측정값이 들어올 때마다 해당 장비의 규칙을 평가한다. 측정값 저장이 커밋된 뒤 별도 트랜잭션에서 평가해, 평가가 실패해도 측정값은 남는다(ADR-0013). 오프라인 규칙은 30초 주기 스케줄러로 평가한다.
 - **시간 판단은 모두 `measured_at` 기준**으로 한다.
 - **지금 상태를 나타내는 규칙은 최근 데이터로만 판단한다.** `CO2_HIGH`, `AIRFLOW_BELOW_TARGET`, `BYPASS_TOO_LONG`은 `late = true` 데이터를 쓰지 않는다. 몇 시간 전 데이터로 지금 이상이 뜨는 것을 막는다. `FILTER_CLOGGED`는 `measured_at` 기준 가장 최신 값만 본다.
 - **장비 고장 판정은 늦은 데이터도 쓴다.** `VEMC_NO_RESPONSE`는 시간이 지나도 의미가 남는 고장이라, 오프라인 동안의 HOOD_ON 이벤트와 측정값도 함께 평가한다. 끊긴 동안 연동이 정상이었는지 복구 후에 확인할 수 있다.

@@ -118,6 +118,37 @@ td {
   padding: 4px 0;
 }
 
+/* 열린 이상 목록 (#4) */
+.anomaly-card {
+  margin-bottom: 16px;
+}
+
+.anomaly-table th,
+.anomaly-table td {
+  text-align: left;
+  padding: 6px 8px 6px 0;
+  vertical-align: top;
+}
+
+.anomaly-message {
+  color: #424a53;
+}
+
+.badge-severity-info {
+  background: #ddf4ff;
+  color: #0a3069;
+}
+
+.badge-severity-warn {
+  background: #fff8c5;
+  color: #7d4e00;
+}
+
+.badge-severity-critical {
+  background: #ffebe9;
+  color: #82071e;
+}
+
 /* CO2 추이 그래프 (#3) */
 .chart {
   margin-top: 12px;

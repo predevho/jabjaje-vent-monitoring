@@ -11,41 +11,19 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.eclipse.paho.mqttv5.client.MqttClient;
-import org.eclipse.paho.mqttv5.client.MqttConnectionOptions;
-import org.eclipse.paho.mqttv5.client.persist.MemoryPersistence;
-import org.eclipse.paho.mqttv5.common.MqttMessage;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.web.servlet.MockMvc;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import vent.global.mqtt.MqttClientManager;
+import vent.support.MqttIntegrationTest;
 import vent.telemetry.dto.request.TelemetryMessage;
 import vent.telemetry.service.TelemetryIngestService;
 
@@ -53,64 +31,16 @@ import vent.telemetry.service.TelemetryIngestService;
  * 측정값 수신 통합 테스트.
  *
  * <p>테스트 지점: 실제 Mosquitto 브로커로 측정값을 발행하고, 실제 PostgreSQL에 저장된 결과를 조회 API로 확인한다.
- * 테스트마다 다른 장비나 다른 messageId를 써서 실행 순서와 관계없이 결과가 같다.
+ * 테스트마다 다른 장비나 다른 messageId를 써서 실행 순서와 관계없이 결과가 같다. 컨테이너와 발행 도우미는 {@link MqttIntegrationTest}에 있다.
  *
  * @author predevho (AI 보조: Claude)
  * @since 2026-10-23 (#2)
  */
-@SpringBootTest
-@AutoConfigureMockMvc
-@Testcontainers
-@ActiveProfiles("demo")
-class TelemetryIngestApiTest {
-
-    private static final int QOS_AT_LEAST_ONCE = 1;
-
-    @Container
-    @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16");
-
-    @Container
-    static GenericContainer<?> mosquitto = new GenericContainer<>("eclipse-mosquitto:2")
-            .withCommand("mosquitto", "-c", "/mosquitto-no-auth.conf")
-            .withExposedPorts(1883);
-
-    @DynamicPropertySource
-    static void mqttProperties(DynamicPropertyRegistry registry) {
-        registry.add("vent.mqtt.server-uri", TelemetryIngestApiTest::brokerUri);
-        // 로컬에서 실행 중인 시연 서버(vent-server)와 겹치지 않는 클라이언트 ID
-        registry.add("vent.mqtt.client-id", () -> "vent-server-test-" + UUID.randomUUID());
-    }
-
-    static MqttClient gateway;
-
-    @Autowired
-    MockMvc mockMvc;
-
-    @Autowired
-    MqttClientManager mqttClientManager;
+class TelemetryIngestApiTest extends MqttIntegrationTest {
 
     /** DB 장애를 흉내 내려고 실제 서비스를 감싼다. 끼워 넣지 않은 호출은 실제 메서드로 간다. 테스트마다 초기화된다. */
     @MockitoSpyBean
     TelemetryIngestService ingestService;
-
-    /** 서버가 구독을 마치기 전에 보낸 메시지는 사라지므로, 구독이 끝날 때까지 기다린 뒤 보낸다. */
-    @BeforeEach
-    void waitUntilServerSubscribed() {
-        await().atMost(Duration.ofSeconds(15)).until(mqttClientManager::isReady);
-    }
-
-    @BeforeAll
-    static void connectTestGateway() throws Exception {
-        gateway = new MqttClient(brokerUri(), "test-gateway", new MemoryPersistence());
-        gateway.connect(new MqttConnectionOptions());
-    }
-
-    @AfterAll
-    static void disconnectTestGateway() throws Exception {
-        gateway.disconnect();
-        gateway.close();
-    }
 
     @Test
     @DisplayName("측정값을 보내면 장비의 최신 측정값으로 조회되고, 측정 시각과 수신 시각이 모두 있다")
@@ -277,43 +207,5 @@ class TelemetryIngestApiTest {
         awaitStored("vent-s1", messageId);
         mockMvc.perform(get("/api/devices/vent-s1/telemetry"))
                 .andExpect(jsonPath("$[?(@.messageId == '" + messageId + "')].quality", contains("OUT_OF_RANGE")));
-    }
-
-    private void awaitStored(String deviceId, String messageId) {
-        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
-                mockMvc.perform(get("/api/devices/" + deviceId + "/telemetry"))
-                        .andExpect(status().isOk())
-                        .andExpect(jsonPath("$[*].messageId", hasItem(messageId))));
-    }
-
-    private static void publish(String siteId, String deviceId, String json) throws Exception {
-        MqttMessage message = new MqttMessage(json.getBytes(StandardCharsets.UTF_8));
-        message.setQos(QOS_AT_LEAST_ONCE);
-        gateway.publish("jabjaje/" + siteId + "/" + deviceId + "/telemetry", message);
-    }
-
-    /** 지금 측정한 정상 측정값. extraFields는 앞에 끼워 넣을 추가 필드다. */
-    private static String telemetryJson(String messageId, String deviceId, String extraFields) {
-        return telemetryJson(messageId, deviceId, now(), 820, extraFields);
-    }
-
-    /** 스펙 4.2의 측정값 예시와 같은 값에 측정 시각과 CO2만 바꾼다. */
-    private static String telemetryJson(String messageId, String deviceId, OffsetDateTime measuredAt,
-                                        int co2Ppm, String extraFields) {
-        return """
-                {%s"schemaVersion": 1, "messageId": "%s", "deviceId": "%s",
-                 "measuredAt": "%s",
-                 "co2Ppm": %d, "tempC": 23.4, "humidityPct": 48,
-                 "supplyCmh": 205, "exhaustCmh": 200, "filterPa": 85, "bypass": false}
-                """.formatted(extraFields, messageId, deviceId, measuredAt, co2Ppm);
-    }
-
-    /** 초 단위로 자른 지금 시각(UTC). 응답과 문자열로 비교하기 쉽게 자른다. */
-    private static OffsetDateTime now() {
-        return OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS);
-    }
-
-    private static String brokerUri() {
-        return "tcp://" + mosquitto.getHost() + ":" + mosquitto.getMappedPort(1883);
     }
 }

@@ -5,6 +5,7 @@ import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import vent.telemetry.domain.Telemetry;
+import vent.telemetry.domain.type.TelemetryQuality;
 
 /**
  * 측정값 저장소.
@@ -30,4 +31,11 @@ public interface TelemetryRepository extends JpaRepository<Telemetry, Long>, Tel
 
     /** 한 장비의 측정값을 측정 시각이 늦은 것부터 가져온다. */
     List<Telemetry> findByDeviceIdOrderByMeasuredAtDesc(String deviceId, Limit limit);
+
+    /**
+     * 한 장비의 측정값 중 그 품질인 것만 측정 시각이 늦은 것부터 가져온다. 이상 규칙이 OK 측정값만 볼 때 쓴다.
+     *
+     * @since 2026-10-24 (#4)
+     */
+    List<Telemetry> findByDeviceIdAndQualityOrderByMeasuredAtDesc(String deviceId, TelemetryQuality quality, Limit limit);
 }

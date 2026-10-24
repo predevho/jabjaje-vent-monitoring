@@ -55,6 +55,10 @@ services:
     environment:
       MQTT_URI: tcp://mosquitto:1883
       INTERVAL_SECONDS: "30"
+      CONTROL_PORT: "8090"
+    ports:
+      # 시나리오 제어 API (예: curl -X POST localhost:8090/sites/2/filter-clog)
+      - "127.0.0.1:8090:8090"
 
 volumes:
   mosquitto-data:

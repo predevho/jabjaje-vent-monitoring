@@ -11,8 +11,9 @@ Code lives under `server/src/main/java/vent/`. Each feature (named after a GLOSS
 ```
 vent/<feature>/
 ├── controller/      HTTP (REST) endpoints. No business logic, no @Transactional.
-├── listener/        Message entry points (MQTT subscriptions). Same rules as controller.
+├── listener/        Message entry points (MQTT subscriptions, Spring events from other features). Same rules as controller.
 ├── service/         Use cases. Owns @Transactional boundaries.
+├── rule/            Decision classes: input record in, outcome out. Only their own settings record is injected (no repositories, no DB). Each has a unit test.
 ├── repository/      Spring Data JPA repositories (one per aggregate root). Native SQL only where PostgreSQL features are needed.
 ├── domain/          JPA entities, one file per table.
 │   └── type/        Enums used by the entities (states, kinds, sources).
@@ -25,7 +26,7 @@ Create a layer folder only when the feature has a class for it (an empty `dto/re
 
 Inbound messages from devices (MQTT) are handled like HTTP requests but kept apart from them: the MQTT listener sits in the feature's `listener/` and the message shape in `dto/request/`. Infrastructure shared by several features (the MQTT client connection) lives in `vent/global/<topic>/`.
 
-Settings records (`@ConfigurationProperties`) live next to the code that reads them: a feature's own settings in that feature's `service/` (e.g. `TelemetryQualityProperties`), shared infrastructure settings in `vent/global/<topic>/` (e.g. `MqttBrokerProperties`).
+Settings records (`@ConfigurationProperties`) live next to the code that reads them: a feature's own settings in that feature's `service/` or `rule/` (e.g. `TelemetryQualityProperties`, `FilterCloggedProperties`), shared infrastructure settings in `vent/global/<topic>/` (e.g. `MqttBrokerProperties`).
 
 Name types after the feature they belong to (`TelemetryIngestResult`, not `IngestResult`) so a name stays unambiguous when another feature grows a similar type.
 

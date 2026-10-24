@@ -10,7 +10,8 @@ import java.util.UUID;
  * 열회수 환기장치 한 대의 측정값 생성기.
  *
  * <p>정상 운전 상태를 흉내 낸다. 값마다 이전 값에서 조금씩 움직이는 방식(랜덤 워크)이라 그래프가 자연스럽다.
- * 필터 차압은 아주 천천히 오른다(먼지가 쌓이는 모습). 이상 시나리오는 이후 티켓(#4, #5)에서 추가한다.
+ * 필터 차압은 아주 천천히 오른다(먼지가 쌓이는 모습). 필터 막힘·교체 시나리오(#4)를 켤 수 있고, 다른 이상 시나리오는 #5에서 추가한다.
+ * 게이트웨이 스레드 하나에서만 쓴다.
  *
  * @author predevho (AI 보조: Claude)
  * @since 2026-10-23 (#2)
@@ -21,10 +22,20 @@ public class TelemetryGenerator {
     private final int targetAirflowCmh;
     private final Random random;
 
+    /**
+     * 필터 막힘 시나리오에서 차압이 향하는 값과, 측정할 때마다 오르는 폭 (#4).
+     * 실제로는 몇 주에 걸쳐 오르지만, 시연에서 1~2분 안에 기준(150Pa)을 넘도록 크게 잡았다.
+     */
+    private static final double CLOGGED_FILTER_PA = 180;
+    private static final double CLOG_STEP_PA = 30;
+    private static final double NEW_FILTER_PA = 60;
+
     private double co2Ppm;
     private double tempC;
     private double humidityPct;
     private double filterPa;
+    /** 필터 막힘 시나리오가 켜져 있으면 true */
+    private boolean filterClogging;
 
     public TelemetryGenerator(String ventilatorId, int targetAirflowCmh, long seed) {
         this.ventilatorId = ventilatorId;
@@ -43,7 +54,8 @@ public class TelemetryGenerator {
         co2Ppm = clamp(co2Ppm + drift(15), 500, 950);
         tempC = clamp(tempC + drift(0.1), 21, 25);
         humidityPct = clamp(humidityPct + drift(0.5), 40, 55);
-        filterPa = filterPa + 0.02;
+        // 평소에는 먼지가 쌓이듯 아주 천천히, 막힘 시나리오에서는 측정할 때마다 크게 오른다.
+        filterPa = filterClogging ? Math.min(CLOGGED_FILTER_PA, filterPa + CLOG_STEP_PA) : filterPa + 0.02;
 
         int supplyCmh = (int) Math.round(targetAirflowCmh * 0.98 + drift(2));
         int exhaustCmh = (int) Math.round(supplyCmh * 0.97);
@@ -60,6 +72,25 @@ public class TelemetryGenerator {
                 exhaustCmh,
                 (int) Math.round(filterPa),
                 false);
+    }
+
+    /**
+     * 필터 막힘 시나리오: 다음 측정부터 차압이 측정할 때마다 30Pa씩 올라 180Pa에 머문다.
+     *
+     * @since 2026-10-24 (#4)
+     */
+    public void clogFilter() {
+        filterClogging = true;
+    }
+
+    /**
+     * 필터 교체 시나리오: 차압이 새 필터 수준(60Pa)으로 돌아가고, 다시 천천히 쌓인다.
+     *
+     * @since 2026-10-24 (#4)
+     */
+    public void replaceFilter() {
+        filterClogging = false;
+        filterPa = NEW_FILTER_PA;
     }
 
     private double drift(double maxStep) {

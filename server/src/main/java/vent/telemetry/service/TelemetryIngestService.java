@@ -2,6 +2,7 @@ package vent.telemetry.service;
 
 import java.time.OffsetDateTime;
 import java.util.Optional;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vent.site.domain.Device;
@@ -25,12 +26,15 @@ public class TelemetryIngestService {
     private final DeviceRepository deviceRepository;
     private final TelemetryRepository telemetryRepository;
     private final TelemetryQualityClassifier qualityClassifier;
+    private final ApplicationEventPublisher eventPublisher;
 
     public TelemetryIngestService(DeviceRepository deviceRepository, TelemetryRepository telemetryRepository,
-                                  TelemetryQualityClassifier qualityClassifier) {
+                                  TelemetryQualityClassifier qualityClassifier,
+                                  ApplicationEventPublisher eventPublisher) {
         this.deviceRepository = deviceRepository;
         this.telemetryRepository = telemetryRepository;
         this.qualityClassifier = qualityClassifier;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -67,6 +71,8 @@ public class TelemetryIngestService {
             return TelemetryIngestResult.DUPLICATE;
         }
         device.markReceived(receivedAt);
+        // 받는 쪽(이상 평가)은 이 트랜잭션이 커밋된 뒤에 실행된다 (ADR-0013).
+        eventPublisher.publishEvent(new TelemetryStoredEvent(topicDeviceId, message.messageId()));
         return TelemetryIngestResult.STORED;
     }
 

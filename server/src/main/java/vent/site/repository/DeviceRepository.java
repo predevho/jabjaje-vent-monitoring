@@ -1,5 +1,8 @@
 package vent.site.repository;
 
+import java.util.Collection;
+import java.util.List;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import vent.site.domain.Device;
 
@@ -12,4 +15,12 @@ import vent.site.domain.Device;
  * @since 2026-10-23 (#2)
  */
 public interface DeviceRepository extends JpaRepository<Device, String> {
+
+    /**
+     * 장비들을 현장과 함께 한 쿼리로 가져온다. 이상 목록에 현장 이름을 붙일 때 쓴다.
+     *
+     * @since 2026-10-24 (#4)
+     */
+    @EntityGraph(attributePaths = "site")
+    List<Device> findAllWithSiteByIdIn(Collection<String> ids);
 }

@@ -143,6 +143,34 @@ public class GatewaySimulator {
         }
     }
 
+    /**
+     * 필터 막힘 시나리오를 켠다. 생성기는 게이트웨이 스레드에서만 쓰므로 그 스레드에 맡긴다.
+     *
+     * @since 2026-10-24 (#4)
+     */
+    public void clogFilter() {
+        worker.execute(() -> {
+            generator.clogFilter();
+            Log.info("[%s] 시나리오: 필터 막힘 시작", site.gatewayId());
+        });
+    }
+
+    /**
+     * 필터 교체 시나리오: 차압이 새 필터 수준으로 돌아간다.
+     *
+     * @since 2026-10-24 (#4)
+     */
+    public void replaceFilter() {
+        worker.execute(() -> {
+            generator.replaceFilter();
+            Log.info("[%s] 시나리오: 필터 교체", site.gatewayId());
+        });
+    }
+
+    public SiteConfig site() {
+        return site;
+    }
+
     public void close() {
         worker.shutdownNow();
         try {
