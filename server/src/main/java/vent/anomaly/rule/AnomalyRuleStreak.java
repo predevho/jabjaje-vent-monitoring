@@ -28,7 +28,8 @@ final class AnomalyRuleStreak {
      * @param maxGap      이 간격보다 길게 비면 끊긴 것으로 본다
      * @return 최신 측정값이 조건을 만족하면 구간의 첫 측정값부터 최신 측정값까지의 시간, 아니면 빈 값
      */
-    static Optional<Duration> lastingFor(List<AnomalyRuleTelemetry> newestFirst, Predicate<AnomalyRuleTelemetry> condition,
+    static Optional<Duration> lastingFor(List<AnomalyRuleTelemetry> newestFirst,
+                                         Predicate<AnomalyRuleTelemetry> condition,
                                          Duration maxGap) {
         if (newestFirst.isEmpty() || !condition.test(newestFirst.get(0))) {
             return Optional.empty();

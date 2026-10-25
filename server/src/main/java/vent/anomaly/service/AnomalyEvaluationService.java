@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -72,7 +73,10 @@ public class AnomalyEvaluationService {
             return;
         }
         Device device = found.get();
-        List<DeviceAnomalyRule> applicable = rules.stream().filter(rule -> rule.appliesTo(device.getType())).toList();
+        List<DeviceAnomalyRule> applicable = rules.stream()
+                .filter(
+                        rule -> rule.appliesTo(device.getType()))
+                .toList();
         if (applicable.isEmpty()) {
             return;
         }
@@ -83,9 +87,14 @@ public class AnomalyEvaluationService {
         }
     }
 
-    /** 규칙들 중 가장 긴 조회 범위에, 구간 끊김을 판단할 여유(최대 간격)를 더한다. */
+    /**
+     * 규칙들 중 가장 긴 조회 범위에, 구간 끊김을 판단할 여유(최대 간격)를 더한다.
+     */
     private Duration lookbackOf(List<DeviceAnomalyRule> applicable) {
-        Duration longest = applicable.stream().map(DeviceAnomalyRule::lookback).max(Duration::compareTo).orElse(Duration.ZERO);
+        Duration longest = applicable.stream()
+                .map(DeviceAnomalyRule::lookback)
+                .max(Duration::compareTo)
+                .orElse(Duration.ZERO);
         return longest.plus(continuity.maxGap());
     }
 
@@ -93,12 +102,20 @@ public class AnomalyEvaluationService {
         OffsetDateTime since = OffsetDateTime.now(ZoneOffset.UTC).minus(lookback);
         return telemetryRepository
                 .findByDeviceIdAndQualityAndMeasuredAtAfterOrderByMeasuredAtDesc(deviceId, TelemetryQuality.OK, since)
-                .stream().map(AnomalyEvaluationService::toRuleTelemetry).toList();
+                .stream()
+                .map(AnomalyEvaluationService::toRuleTelemetry)
+                .toList();
     }
 
     private static AnomalyRuleTelemetry toRuleTelemetry(Telemetry telemetry) {
-        return new AnomalyRuleTelemetry(telemetry.getMeasuredAt(), telemetry.getCo2Ppm(), telemetry.getSupplyCmh(),
-                telemetry.getFilterPa(), telemetry.isBypass(), telemetry.isBoost(), telemetry.isLate());
+        return new AnomalyRuleTelemetry(
+                telemetry.getMeasuredAt(),
+                telemetry.getCo2Ppm(),
+                telemetry.getSupplyCmh(),
+                telemetry.getFilterPa(),
+                telemetry.isBypass(),
+                telemetry.isBoost(),
+                telemetry.isLate());
     }
 
     private void apply(String deviceId, DeviceAnomalyRule rule, AnomalyRuleOutcome outcome) {
@@ -107,7 +124,11 @@ public class AnomalyEvaluationService {
             case RAISE -> {
                 if (open.isEmpty()) {
                     anomalyRepository.save(Anomaly.openForDevice(
-                            deviceId, rule.name(), outcome.severity(), outcome.message(), outcome.at()));
+                            deviceId,
+                            rule.name(),
+                            outcome.severity(),
+                            outcome.message(),
+                            outcome.at()));
                     log.info("이상 발생: {} {} {} ({})", deviceId, rule.name(), outcome.severity(), outcome.message());
                 } else if (open.get().escalate(outcome.severity(), outcome.message())) {
                     log.info("이상 심각도 올림: {} {} → {} ({})", deviceId, rule.name(), outcome.severity(), outcome.message());

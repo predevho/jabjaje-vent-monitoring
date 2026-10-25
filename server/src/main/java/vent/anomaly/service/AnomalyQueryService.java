@@ -42,12 +42,28 @@ public class AnomalyQueryService {
     @Transactional(readOnly = true)
     public List<AnomalyResponse> findByStatus(AnomalyStatus status) {
         List<Anomaly> anomalies = anomalyRepository.findByStatusOrderByOpenedAtDesc(status);
-        List<String> deviceIds = anomalies.stream().map(Anomaly::getDeviceId).filter(Objects::nonNull).distinct().toList();
-        Map<String, Site> siteByDevice = deviceRepository.findAllWithSiteByIdIn(deviceIds).stream()
-                .collect(Collectors.toMap(Device::getId, Device::getSite, (a, b) -> a));
-        List<String> gatewayIds = anomalies.stream().map(Anomaly::getGatewayId).filter(Objects::nonNull).distinct().toList();
-        Map<String, Site> siteByGateway = gatewayRepository.findAllWithSiteByIdIn(gatewayIds).stream()
-                .collect(Collectors.toMap(Gateway::getId, Gateway::getSite, (a, b) -> a));
+
+        List<String> deviceIds = anomalies.stream()
+                .map(Anomaly::getDeviceId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        Map<String, Site> siteByDevice = deviceRepository.findAllWithSiteByIdIn(deviceIds)
+                .stream()
+                .collect(
+                        Collectors.toMap(Device::getId, Device::getSite, (a, b) -> a));
+
+        List<String> gatewayIds = anomalies.stream()
+                .map(Anomaly::getGatewayId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        Map<String, Site> siteByGateway = gatewayRepository.findAllWithSiteByIdIn(gatewayIds)
+                .stream()
+                .collect(
+                        Collectors.toMap(Gateway::getId, Gateway::getSite, (a, b) -> a));
 
         return anomalies.stream()
                 .map(anomaly -> AnomalyResponse.of(anomaly, anomaly.getDeviceId() != null
