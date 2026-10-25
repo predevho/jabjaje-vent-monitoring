@@ -85,11 +85,14 @@ public class HoodInterlockCheckService {
      */
     private HoodInterlockInput inputFor(DeviceEvent hoodOn) {
         Device vemc = deviceRepository.findById(hoodOn.getDeviceId()).orElseThrow();
+
         OffsetDateTime hoodOnAt = hoodOn.getOccurredAt();
+
         OffsetDateTime hoodOffAt = eventRepository
                 .findFirstByDeviceIdAndTypeAndOccurredAtAfterOrderByOccurredAtAsc(vemc.getId(), DeviceEventType.HOOD_OFF, hoodOnAt)
                 .map(DeviceEvent::getOccurredAt)
                 .orElse(null);
+
         boolean hoodAlreadyOn = eventRepository
                 .findFirstByDeviceIdAndOccurredAtBeforeOrderByOccurredAtDesc(vemc.getId(), hoodOnAt)
                 .map(previous -> previous.getType() == DeviceEventType.HOOD_ON)
@@ -98,15 +101,18 @@ public class HoodInterlockCheckService {
         Optional<String> ventilatorId = deviceRepository
                 .findFirstBySiteIdAndTypeOrderByIdAsc(vemc.getSite().getId(), DeviceType.VENTILATOR)
                 .map(Device::getId);
+
         HoodInterlockReading before = ventilatorId.flatMap(id -> telemetryRepository
                         .findFirstByDeviceIdAndQualityAndMeasuredAtLessThanEqualOrderByMeasuredAtDesc(id, TelemetryQuality.OK, hoodOnAt))
                 .map(HoodInterlockCheckService::toReading)
                 .orElse(null);
+
         HoodInterlockReading after = ventilatorId.flatMap(id -> telemetryRepository
                         .findFirstByDeviceIdAndQualityAndMeasuredAtGreaterThanEqualOrderByMeasuredAtAsc(
                                 id, TelemetryQuality.OK, hoodOnAt.plus(properties.responseWait())))
                 .map(HoodInterlockCheckService::toReading)
                 .orElse(null);
+
         return new HoodInterlockInput(hoodOnAt, hoodOffAt, hoodAlreadyOn, before, after);
     }
 
