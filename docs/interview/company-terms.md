@@ -181,6 +181,7 @@
 ## 6. 면접 전에 확인하거나 질문으로 바꿀 것
 
 저장소 안에 출처가 없어서 단정하면 안 되는 것들이다. [interview-questions.md](interview-questions.md)의 역질문과 함께 본다.
+2026-10-26 웹 조사로 일부(제조사 국적, VEMC 연결 방식과 연동 대수, 모델 라인업, 회사 사업 구조)를 확인했다. 결과와 출처는 [company-research.md](company-research.md)에 있다.
 
 1. VEMC가 환기장치에 신호를 보내는 방식, 네트워크 연결 여부
 2. KOMFOVENT 장비를 원격으로 읽는 방법 (Modbus, BACnet, 제조사 클라우드)
