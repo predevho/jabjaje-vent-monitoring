@@ -374,7 +374,7 @@ SERVICE_REQUEST 1──0..1 VERDICT
 - 이미 열린 이상에 더 무거운 심각도가 나오면(CO2 1,500ppm 초과) 같은 이상의 심각도를 올린다. 해결될 때까지 내리지 않는다. 심각 판단도 1,000ppm 초과가 이어지는 동안에만 한다(#5).
 - 조회 범위(가장 긴 규칙 기준 + 2분) 안에 OK 측정값이 없으면 판단하지 않는다. 오래된 값으로 지금 상태를 해제하지 않기 위해서다.
 - `AIRFLOW_BELOW_TARGET`은 바이패스·부스트 중 측정값을 쓰지 않는다. 부스트 여부는 측정값의 `boost`(#8)로 안다.
-- 지속 시간은 설정이다. 시연 때는 `VENT_CO2_LASTING=2m VENT_AIRFLOW_LASTING=2m VENT_BYPASS_LASTING=2m docker compose up -d`처럼 줄인다.
+- 지속 시간은 설정이다. 시연 때는 `docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d`로 각 2분으로 줄인다(#14, 덮어쓰기 파일이 `VENT_ANOMALY_CO2HIGH_LASTING`, `VENT_ANOMALY_AIRFLOWBELOWTARGET_LASTING`, `VENT_ANOMALY_BYPASSTOOLONG_LASTING`을 직접 넣는다). 셸 변수로 `VENT_CO2_LASTING=2m VENT_AIRFLOW_LASTING=2m VENT_BYPASS_LASTING=2m docker compose up -d`처럼 줄일 수도 있다. `docker-compose.yml`이 이 셸 변수를 위의 컨테이너 환경변수로 넘긴다.
 - 규칙 하나를 클래스 하나로 만들고, 규칙마다 단위 테스트를 둔다.
 - 이상은 대시보드에 표시하고 로그로 남긴다. 사람에게 보내는 알림(슬랙, 카카오 등)은 MVP 범위 밖이다.
 
